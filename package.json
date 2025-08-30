@@ -2,17 +2,15 @@
   "name": "dbprisma",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
-  "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "prisma:studio": "npx prisma studio"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "private": true,
   "type": "commonjs",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "dev": "vercel dev -p 3000",
+    "vercel-build": "prisma generate",
+    "migrate": "prisma migrate deploy",
+    "studio": "prisma studio"
+  },
   "dependencies": {
     "@prisma/client": "^6.15.0",
     "@prisma/extension-accelerate": "^2.0.2",

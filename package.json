@@ -6,7 +6,7 @@
   "type": "commonjs",
   "engines": { "node": ">=18" },
   "scripts": {
-    "dev": "vercel dev -p 3000",
+    "local": "vercel dev --listen 3000",
     "vercel-build": "prisma generate",
     "migrate": "prisma migrate deploy",
     "studio": "prisma studio"

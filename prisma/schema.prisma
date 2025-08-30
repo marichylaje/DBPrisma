@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")         // Accelerate
+  directUrl = env("DIRECT_DATABASE_URL")  // Neon directo (migraciones)
+}
+
+model UserEntitlement {
+  userKey        String   @id
+
+  // Suscripción verificada/activa
+  subActive      Boolean  @default(false)
+  subPlatform    String?
+  subProductId   String?
+  subExpiry      DateTime?
+
+  // Android "pendiente" (sin Play API)
+  pendingAndroid       Boolean  @default(false)
+  androidPurchaseToken String?
+  lastVerifyAt         DateTime?
+  verifyError          String?
+
+  // Trial 5 días
+  trialGranted   Boolean  @default(false)
+  trialStart     DateTime?
+  trialExpiry    DateTime?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}

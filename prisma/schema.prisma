@@ -32,3 +32,25 @@ model UserEntitlement {
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
+
+model UserDeck {
+  id               String   @id @default(cuid())
+  userKey          String
+  deckName         String
+  deckDescription  String?  @db.Text
+  instagram        String?
+
+  commanderName    String
+  commanderId      String?  // Scryfall ID si lo tienes
+  partnerName      String?
+  partnerId        String?  // Scryfall ID si lo tienes
+
+  // Lista compacta: [{ name: "...", count: 1 }, ...]
+  cards            Json
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userKey])
+  @@unique([userKey, deckName]) // 1 nombre único por usuario
+}

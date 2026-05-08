@@ -17,7 +17,17 @@ module.exports = async (req, res) => {
       : await prisma.userDeck.findUnique({ where: { userKey_deckName: { userKey, deckName } } });
 
     if (!deck) return res.status(404).json({ error: 'not_found' });
-    res.status(200).json({ deck });
+
+    // Reconstruimos objetos para compatibilidad con el frontend
+    const responseDeck = {
+      ...deck,
+      commander: { name: deck.commanderName, id: deck.commanderId },
+      partner: deck.partnerName
+        ? { name: deck.partnerName, id: deck.partnerId }
+        : null,
+    };
+
+    res.status(200).json({ deck: responseDeck });
   } catch (e) {
     console.error('❌ /api/decks/get', e);
     res.status(500).json({ error: 'failed' });

@@ -11,21 +11,30 @@ module.exports = async (req, res) => {
       deckName,
       deckDescription = null,
       instagram = null,
-      commander = {}, // { name, id? }
-      partner = null, // { name, id? } | null
-      cards = [],     // [{ name, count }]
-      deckId = null,  // opcional: actualizar por id explícito
-      oldDeckName = null // opcional: renombrar
+      commander = {},
+      commanderName: cName, // soporte plano
+      commanderId: cId,     // soporte plano
+      partner = null,
+      partnerName: pName,   // soporte plano
+      partnerId: pId,       // soporte plano
+      cards = [],
+      deckId = null,
+      oldDeckName = null
     } = req.body || {};
+
+    const finalCommanderName = commander?.name || cName;
+    const finalCommanderId = commander?.id || cId;
+    const finalPartnerName = partner?.name || pName;
+    const finalPartnerId = partner?.id || pId;
 
     if (!userKey || !deckName) {
       return res.status(400).json({ error: 'userKey and deckName are required' });
     }
-    if (!commander?.name) {
-      return res.status(400).json({ error: 'commander.name is required' });
+    if (!finalCommanderName) {
+      return res.status(400).json({ error: 'commander name is required' });
     }
-    if (!Array.isArray(cards) || cards.length === 0) {
-      return res.status(400).json({ error: 'cards array required' });
+    if (!Array.isArray(cards)) {
+      return res.status(400).json({ error: 'cards must be an array' });
     }
 
     // Modo A: actualizar por id si viene
@@ -37,10 +46,10 @@ module.exports = async (req, res) => {
           deckName,
           deckDescription,
           instagram,
-          commanderName: commander.name,
-          commanderId: commander.id ?? null,
-          partnerName: partner?.name ?? null,
-          partnerId: partner?.id ?? null,
+          commanderName: finalCommanderName,
+          commanderId: finalCommanderId ?? null,
+          partnerName: finalPartnerName ?? null,
+          partnerId: finalPartnerId ?? null,
           cards,
         },
       });
@@ -57,20 +66,20 @@ module.exports = async (req, res) => {
         deckName,
         deckDescription,
         instagram,
-        commanderName: commander.name,
-        commanderId: commander.id ?? null,
-        partnerName: partner?.name ?? null,
-        partnerId: partner?.id ?? null,
+        commanderName: finalCommanderName,
+        commanderId: finalCommanderId ?? null,
+        partnerName: finalPartnerName ?? null,
+        partnerId: finalPartnerId ?? null,
         cards,
       },
       update: {
         deckName, // permite renombrar (si usaste oldDeckName)
         deckDescription,
         instagram,
-        commanderName: commander.name,
-        commanderId: commander.id ?? null,
-        partnerName: partner?.name ?? null,
-        partnerId: partner?.id ?? null,
+        commanderName: finalCommanderName,
+        commanderId: finalCommanderId ?? null,
+        partnerName: finalPartnerName ?? null,
+        partnerId: finalPartnerId ?? null,
         cards,
       },
     });

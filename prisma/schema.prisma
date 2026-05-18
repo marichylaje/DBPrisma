@@ -54,3 +54,91 @@ model UserDeck {
   @@index([userKey])
   @@unique([userKey, deckName]) // 1 nombre único por usuario
 }
+
+model SharedDeck {
+  id               String   @id @default(cuid())
+  userKey          String?
+  deckName         String
+  deckDescription  String?  @db.Text
+
+  commanderName    String
+  commanderId      String?
+  partnerName      String?
+  partnerId        String?
+
+  // List: [{ name: "...", count: 1 }]
+  cards            Json
+
+  createdAt        DateTime @default(now())
+
+  // Extensibility for tournaments
+  sharedType       String   @default("QR") // "QR", "TOURNAMENT", etc.
+  tournamentId     String?
+
+  @@index([createdAt])
+  @@index([tournamentId])
+}
+
+model User {
+  id           String   @id // Proveniente del servicio de Autenticación (Firebase/Supabase)
+  name         String
+  surname      String
+  email        String
+  role         String   // "player" o "store"
+  
+  // Gamificación (Jugador)
+  xp           Int      @default(0)
+  level        Int      @default(1)
+  
+  // Perfil de Tienda
+  storeName    String?
+  storeAddress String?
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  participants TournamentParticipant[]
+}
+
+model Tournament {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?  @db.Text
+  format       String   // "commander_multiplayer", "duel_1vs1", "two_headed_giant", "draft"
+  status       String   @default("created") // "created", "active", "finished"
+  powerLevel   String   // "casual", "optimized", "cedh"
+  
+  // Ubicación física
+  locationName String
+  latitude     Float
+  longitude    Float
+  
+  entryFee     Int      // En céntimos (ej: 500 = €5.00)
+  maxPlayers   Int
+  startDate    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  storeId      String   // ID de la tienda organizadora
+  
+  participants TournamentParticipant[]
+}
+
+model TournamentParticipant {
+  id              String     @id @default(cuid())
+  tournamentId    String
+  tournament      Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  deckSnapshot    Json?      // Copia profunda del mazo activo al inscribirse
+  roundsReport    String[]   // Lista de resultados por ronda (ej: ["2-1", "2-0"])
+  openToTrade     Boolean    @default(false)
+  pointsProcessed Boolean    @default(false) // Escudo de doble pago
+  
+  createdAt       DateTime   @default(now())
+  
+  @@unique([tournamentId, userId]) // Un jugador no puede inscribirse dos veces
+}
+

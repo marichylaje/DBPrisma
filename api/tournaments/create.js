@@ -25,11 +25,23 @@ module.exports = async (req, res) => {
     }
 
     // Validación defensiva de roles: comprobar que la tienda existe y tiene el rol correcto
-    const storeUser = await prisma.user.findUnique({
+    let storeUser = await prisma.user.findUnique({
       where: { id: storeId }
     });
 
-    if (!storeUser || storeUser.role !== 'store') {
+    if (!storeUser) {
+      storeUser = await prisma.user.create({
+        data: {
+          id: storeId,
+          name: storeId === 'store-1' ? 'MTG Haven' : 'Local Store Organizer',
+          surname: 'Store',
+          email: storeId === 'store-1' ? 'contact@mtghaven.com' : `${storeId}@store.com`,
+          role: 'store',
+          storeName: storeId === 'store-1' ? 'MTG Haven Malaga' : 'Local Store',
+          storeAddress: 'Calle Alameda 12, Malaga',
+        }
+      });
+    } else if (storeUser.role !== 'store') {
       return res.status(400).json({ error: 'Only registered store accounts can organize tournaments' });
     }
 

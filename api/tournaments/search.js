@@ -6,7 +6,17 @@ module.exports = async (req, res) => {
     if (req.method !== 'GET') return res.status(405).end();
     if (!checkSecret(req, res)) return;
 
-    const { lat, lng } = req.query || {};
+    const { lat, lng, id } = req.query || {};
+
+    if (id) {
+      const tournament = await prisma.tournament.findUnique({
+        where: { id },
+        include: {
+          participants: true,
+        },
+      });
+      return res.status(200).json({ ok: true, tournaments: tournament ? [tournament] : [] });
+    }
 
     if (!lat || !lng) {
       // Si no hay coordenadas, devolvemos todos los torneos activos/creados ordenados por fecha

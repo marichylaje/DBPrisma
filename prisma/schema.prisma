@@ -21,7 +21,7 @@ model UserEntitlement {
   // Android pendiente
   pendingAndroid       Boolean  @default(false)
   androidPurchaseToken String?
-  lastVerifyAt         DateTime
+  lastVerifyAt         DateTime?
   verifyError          String?
 
   // Trial
@@ -150,14 +150,9 @@ model UserCollection {
 }
 
 model CardPriceHistory {
-  id        String   @id @default(cuid())
-  cardKey   String   // Clave identificadora de la carta (ej. "Black Lotus|vma|4" o "Aether Vial")
-  priceUsd  Float?
-  priceEur  Float?
-  timestamp DateTime @default(now())
-
-  @@index([cardKey])
-  @@index([timestamp])
+  cardKey   String   @id // Clave identificadora de la carta (ej. "Black Lotus|vma|4" o "Aether Vial")
+  history   Json     // Array: [ { "timestamp": 1782347289000, "priceUsd": 4.09, "priceEur": 3.88 } ]
+  updatedAt DateTime @updatedAt
 }
 
 

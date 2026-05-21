@@ -12,18 +12,13 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'cardKey is required' });
     }
 
-    const points = await prisma.cardPriceHistory.findMany({
+    const record = await prisma.cardPriceHistory.findUnique({
       where: { cardKey },
-      orderBy: { timestamp: 'asc' },
     });
 
     res.status(200).json({
       ok: true,
-      history: points.map((p) => ({
-        timestamp: new Date(p.timestamp).getTime(),
-        priceUsd: p.priceUsd,
-        priceEur: p.priceEur,
-      })),
+      history: record && Array.isArray(record.history) ? record.history : [],
     });
   } catch (e) {
     console.error('❌ /api/prices/history', e);

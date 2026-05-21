@@ -54,6 +54,14 @@ module.exports = async (req, res) => {
 
     console.log(`[PriceRefresh] Encontradas ${cardsArray.length} cartas únicas para actualizar.`);
 
+    // Obtener todos los historiales existentes de estas cartas en una sola consulta
+    const existingRecords = await prisma.cardPriceHistory.findMany({
+      where: {
+        cardKey: { in: cardsArray },
+      },
+    });
+    const historyMap = new Map(existingRecords.map((r) => [r.cardKey, r.history]));
+
     // 2) Dividir en lotes de 75 (Límite de Scryfall por request en POST /cards/collection)
     const batches = chunk(cardsArray, 75);
     let updatedCount = 0;
@@ -109,11 +117,51 @@ module.exports = async (req, res) => {
             }
 
             if (matches) {
-              await prisma.cardPriceHistory.create({
-                data: {
-                  cardKey: key,
+              let historyArray = historyMap.get(key);
+              if (!Array.isArray(historyArray)) {
+                historyArray = [];
+              }
+
+              const now = Date.now();
+              const isSameDay = (ts1, ts2) => {
+                const d1 = new Date(ts1);
+                const d2 = new Date(ts2);
+                return (
+                  d1.getUTCFullYear() === d2.getUTCFullYear() &&
+                  d1.getUTCMonth() === d2.getUTCMonth() &&
+                  d1.getUTCDate() === d2.getUTCDate()
+                );
+              };
+
+              if (historyArray.length > 0 && isSameDay(historyArray[historyArray.length - 1].timestamp, now)) {
+                historyArray[historyArray.length - 1] = {
+                  timestamp: now,
                   priceUsd: usd,
                   priceEur: eur,
+                };
+              } else {
+                historyArray.push({
+                  timestamp: now,
+                  priceUsd: usd,
+                  priceEur: eur,
+                });
+              }
+
+              if (historyArray.length > 30) {
+                historyArray = historyArray.slice(-30);
+              }
+
+              // Actualizar en el mapa en memoria para consistencia
+              historyMap.set(key, historyArray);
+
+              await prisma.cardPriceHistory.upsert({
+                where: { cardKey: key },
+                create: {
+                  cardKey: key,
+                  history: historyArray,
+                },
+                update: {
+                  history: historyArray,
                 },
               });
               updatedCount++;

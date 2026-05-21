@@ -1,0 +1,17 @@
+name: Daily Card Price Refresh
+
+on:
+  schedule:
+    # Se ejecuta a las 03:00 UTC todos los días (aproximadamente 5:00 AM en España)
+    - cron: '0 3 * * *'
+  workflow_dispatch: # Permite ejecutar el workflow manualmente desde la interfaz de GitHub
+
+jobs:
+  refresh-prices:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Price Refresh
+        run: |
+          curl -X POST "https://db-prisma-rho.vercel.app/api/admin/refresh-prices" \
+            -H "Content-Type: application/json" \
+            -H "x-app-secret: ${{ secrets.APP_BACKEND_SECRET }}"

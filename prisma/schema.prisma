@@ -21,7 +21,7 @@ model UserEntitlement {
   // Android pendiente
   pendingAndroid       Boolean  @default(false)
   androidPurchaseToken String?
-  lastVerifyAt         DateTime?
+  lastVerifyAt         DateTime
   verifyError          String?
 
   // Trial
@@ -141,4 +141,23 @@ model TournamentParticipant {
   
   @@unique([tournamentId, userId]) // Un jugador no puede inscribirse dos veces
 }
+
+model UserCollection {
+  userKey   String   @id
+  cards     Json     // Arreglo de strings: ["Black Lotus|vma|4", "Aether Vial", ...]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CardPriceHistory {
+  id        String   @id @default(cuid())
+  cardKey   String   // Clave identificadora de la carta (ej. "Black Lotus|vma|4" o "Aether Vial")
+  priceUsd  Float?
+  priceEur  Float?
+  timestamp DateTime @default(now())
+
+  @@index([cardKey])
+  @@index([timestamp])
+}
+
 

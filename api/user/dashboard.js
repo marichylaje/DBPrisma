@@ -1,5 +1,9 @@
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
+const {
+  refreshUserGamification,
+  summarizeRounds,
+} = require('../../lib/playerGamification');
 
 module.exports = async (req, res) => {
   try {
@@ -12,17 +16,9 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'userId is required' });
     }
 
-    // 1. Fetch user and their tournament participations
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        participants: {
-          include: {
-            tournament: true,
-          },
-        },
-      },
-    });
+    // 1. Refrescar snapshot persistido y cargar el usuario con su histórico.
+    const refreshed = await refreshUserGamification(prisma, userId);
+    const user = refreshed && refreshed.user;
 
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -41,26 +37,24 @@ module.exports = async (req, res) => {
       .map((p) => {
         tournamentsPlayed++;
         
-        let wins = 0;
-        let losses = 0;
-        let draws = 0;
         const results = [];
 
         if (Array.isArray(p.roundsReport)) {
           for (const round of p.roundsReport) {
-            const scores = round.split('-').map(Number);
-            if (scores.length === 2 && !isNaN(scores[0]) && !isNaN(scores[1])) {
+            const scores = String(round).split('-').map(Number);
+            if (
+              scores.length === 2 &&
+              !isNaN(scores[0]) &&
+              !isNaN(scores[1])
+            ) {
               totalMatches++;
               if (scores[0] > scores[1]) {
-                wins++;
                 matchWins++;
                 results.push('W');
               } else if (scores[0] < scores[1]) {
-                losses++;
                 matchLosses++;
                 results.push('L');
               } else {
-                draws++;
                 matchDraws++;
                 results.push('D');
               }
@@ -102,10 +96,19 @@ module.exports = async (req, res) => {
       ? parseFloat((((matchWins + 0.5 * matchDraws) / totalMatches) * 100).toFixed(1))
       : 0.0;
 
+    const storedStats = user.statsJson || {};
     const stats = {
-      torneos_jugados: tournamentsPlayed,
-      win_rate_general: winRateGeneral,
-      comandante_favorito: favoriteCommander,
+      torneos_jugados: storedStats.tournamentsPlayed ?? tournamentsPlayed,
+      win_rate_general: storedStats.winRateGeneral ?? winRateGeneral,
+      comandante_favorito:
+        storedStats.favoriteCommander ?? favoriteCommander,
+      victorias_totales: storedStats.totalMatchWins ?? matchWins,
+      partidas_totales: storedStats.totalMatches ?? totalMatches,
+      top1: storedStats.top1Finishes ?? 0,
+      racha_trade: storedStats.maxOpenToTradeStreak ?? 0,
+      insignias_desbloqueadas:
+        storedStats.badgesUnlocked ??
+        (Array.isArray(user.badgesJson) ? user.badgesJson.length : 0),
     };
 
     res.status(200).json({
@@ -114,6 +117,8 @@ module.exports = async (req, res) => {
         id: user.id,
         name: user.name,
         surname: user.surname,
+        email: user.email,
+        role: user.role,
         username: user.username,
         avatarUrl: user.avatarUrl,
         xp: user.xp,
@@ -121,6 +126,7 @@ module.exports = async (req, res) => {
       },
       historico_torneos: historicoTorneos,
       estadisticas_globales: stats,
+      badges: Array.isArray(user.badgesJson) ? user.badgesJson : [],
     });
   } catch (e) {
     console.error('❌ /api/user/dashboard error:', e);

@@ -1,5 +1,9 @@
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
+const {
+  refreshUserGamification,
+  summarizeRounds,
+} = require('../../lib/playerGamification');
 
 module.exports = async (req, res) => {
   try {
@@ -41,6 +45,26 @@ module.exports = async (req, res) => {
       });
 
       const userUpdatesSummary = [];
+      const processedUserIds = new Set();
+
+      const rankedParticipants = [...tournament.participants].sort((a, b) => {
+        if (b.matchPoints !== a.matchPoints) return b.matchPoints - a.matchPoints;
+
+        const roundsA = summarizeRounds(a.roundsReport);
+        const roundsB = summarizeRounds(b.roundsReport);
+
+        if (roundsB.wins !== roundsA.wins) return roundsB.wins - roundsA.wins;
+        if (roundsA.losses !== roundsB.losses) return roundsA.losses - roundsB.losses;
+
+        return a.createdAt.getTime() - b.createdAt.getTime();
+      });
+
+      for (let index = 0; index < rankedParticipants.length; index++) {
+        await tx.tournamentParticipant.update({
+          where: { id: rankedParticipants[index].id },
+          data: { finalPosition: index + 1 },
+        });
+      }
 
       // B. Process each participant's XP points
       for (const p of tournament.participants) {
@@ -90,6 +114,7 @@ module.exports = async (req, res) => {
             totalXp: updatedUser.xp,
             level: updatedUser.level,
           });
+          processedUserIds.add(p.userId);
         }
 
         // D. Flag participant as processed to shield against double-processing
@@ -97,6 +122,19 @@ module.exports = async (req, res) => {
           where: { id: p.id },
           data: { pointsProcessed: true },
         });
+      }
+
+      for (const processedUserId of processedUserIds) {
+        const refreshed = await refreshUserGamification(tx, processedUserId);
+        if (!refreshed) continue;
+
+        const summary = userUpdatesSummary.find(
+          (item) => item.userId === processedUserId,
+        );
+        if (summary) {
+          summary.badgesUnlocked = refreshed.snapshot.badges.length;
+          summary.currentRank = refreshed.snapshot.stats.currentRank;
+        }
       }
 
       return {

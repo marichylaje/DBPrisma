@@ -97,7 +97,8 @@ model User {
   // Nuevos campos de perfil y estadísticas competitivas
   username     String?
   avatarUrl    String?
-  statsJson    Json?    // { winRate: 50.0, tournamentsPlayed: 12, favoriteCommander: "Urza..." }
+  statsJson    Json?    // Snapshot persistido de métricas competitivas del jugador
+  badgesJson   Json?    // Insignias desbloqueadas por méritos medibles en torneos
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -244,5 +245,4 @@ model CardPriceHistory {
   history   Json     // Array: [ { "timestamp": 1782347289000, "priceUsd": 4.09, "priceEur": 3.88 } ]
   updatedAt DateTime @updatedAt
 }
-
 

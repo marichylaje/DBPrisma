@@ -12,7 +12,12 @@ module.exports = async (req, res) => {
       const tournament = await prisma.tournament.findUnique({
         where: { id },
         include: {
-          participants: true,
+          participants: {
+            include: {
+              user: true,
+            },
+          },
+          matches: true,
         },
       });
       return res.status(200).json({ ok: true, tournaments: tournament ? [tournament] : [] });

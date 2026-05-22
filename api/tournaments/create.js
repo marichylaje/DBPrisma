@@ -18,6 +18,20 @@ module.exports = async (req, res) => {
       maxPlayers,
       startDate,
       storeId,
+      // Nuevos campos
+      roomCode = null,
+      bannerUrl = null,
+      isPhysical = true,
+      address = null,
+      divisa = 'EUR',
+      allowProxies = true,
+      proxyLimit = 10,
+      requireDecklist = true,
+      rulesEnforcement = 'Regular',
+      roundType = 'Swiss',
+      prizePool = null,
+      prizeDetail = null,
+      admins = null,
     } = req.body || {};
 
     if (!title || !format || !powerLevel || !locationName || latitude === undefined || longitude === undefined || entryFee === undefined || !maxPlayers || !startDate || !storeId) {
@@ -82,6 +96,20 @@ module.exports = async (req, res) => {
         startDate: new Date(startDate),
         storeId,
         status: 'created',
+        // Nuevos campos
+        roomCode: roomCode || `CMD-${Math.floor(100 + Math.random() * 900)}`,
+        bannerUrl,
+        isPhysical: !!isPhysical,
+        address: address || locationName,
+        divisa,
+        allowProxies: !!allowProxies,
+        proxyLimit: parseInt(proxyLimit, 10),
+        requireDecklist: !!requireDecklist,
+        rulesEnforcement,
+        roundType,
+        prizePool,
+        prizeDetail,
+        admins: admins || [],
       },
     });
 

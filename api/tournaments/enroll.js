@@ -6,7 +6,18 @@ module.exports = async (req, res) => {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
 
-    const { tournamentId, userId, deck = null, openToTrade = false } = req.body || {};
+    const {
+      tournamentId,
+      userId,
+      deck = null,
+      openToTrade = false,
+      // Nuevos campos
+      paymentStatus = 'Pending',
+      paymentMethod = 'Cash',
+      decklistUrl = null,
+      commanderScryfallId = null,
+      decklistValidated = false,
+    } = req.body || {};
 
     if (!tournamentId || !userId) {
       return res.status(400).json({ error: 'tournamentId and userId are required' });
@@ -78,6 +89,12 @@ module.exports = async (req, res) => {
         openToTrade: !!openToTrade,
         roundsReport: [],
         pointsProcessed: false,
+        // Nuevos campos
+        paymentStatus,
+        paymentMethod,
+        decklistUrl,
+        commanderScryfallId: commanderScryfallId || (deck && deck.commander ? deck.commander.id : null),
+        decklistValidated: !!decklistValidated,
       },
     });
 

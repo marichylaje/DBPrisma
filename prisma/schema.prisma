@@ -241,3 +241,27 @@ model CardPriceHistory {
   history   Json     // Array: [ { "timestamp": 1782347289000, "priceUsd": 4.09, "priceEur": 3.88 } ]
   updatedAt DateTime @updatedAt
 }
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  userKey    String
+  sessionId  String
+  eventName  String
+  screenName String?
+  flowName   String?
+  platform   String
+  appVersion String
+  language   String?
+  region     String?
+  role       String?
+  isPaidUser Boolean?
+  occurredAt DateTime
+  properties Json?
+  createdAt  DateTime @default(now())
+
+  @@index([occurredAt])
+  @@index([eventName, occurredAt])
+  @@index([userKey, occurredAt])
+  @@index([sessionId, occurredAt])
+  @@index([screenName, occurredAt])
+}

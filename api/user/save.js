@@ -6,32 +6,50 @@ module.exports = async (req, res) => {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
 
-    const { userId, name, surname = '', email = '' } = req.body || {};
+    const {
+      userId,
+      nickname,
+      role,
+      storeAddress = null,
+      storeName = null,
+    } = req.body || {};
 
     if (!userId) {
       return res.status(400).json({ error: 'userId is required' });
     }
-    if (!name) {
-      return res.status(400).json({ error: 'name is required' });
+    if (!nickname) {
+      return res.status(400).json({ error: 'nickname is required' });
     }
-
-    const defaultEmail = email || `${userId}@planeswalker.com`;
 
     const upserted = await prisma.user.upsert({
       where: { id: userId },
       create: {
         id: userId,
-        name: name,
-        surname: surname,
-        email: defaultEmail,
-        role: 'player',
+        nickname: nickname,
+        role: role || 'player',
         xp: 0,
         level: 1,
+        storeName: role === 'store' ? storeName : null,
+        storeAddress: role === 'store' ? storeAddress : null,
       },
       update: {
-        name: name,
-        surname: surname,
-        email: defaultEmail,
+        nickname: nickname,
+        ...(role ? { role } : {}),
+        ...(role === 'store'
+          ? { storeName, storeAddress }
+          : {}),
+      },
+      select: {
+        id: true,
+        nickname: true,
+        role: true,
+        xp: true,
+        level: true,
+        storeName: true,
+        storeAddress: true,
+        createdAt: true,
+        updatedAt: true,
+        badgesJson: true,
       },
     });
 

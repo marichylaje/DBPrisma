@@ -109,7 +109,7 @@ module.exports = async (req, res) => {
 
           userUpdatesSummary.push({
             userId: p.userId,
-            userName: `${updatedUser.name} ${updatedUser.surname}`,
+            userName: updatedUser.nickname || updatedUser.id,
             xpEarned,
             totalXp: updatedUser.xp,
             level: updatedUser.level,

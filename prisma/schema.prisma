@@ -81,9 +81,7 @@ model SharedDeck {
 
 model User {
   id           String   @id // Proveniente del servicio de Autenticación (Firebase/Supabase)
-  name         String
-  surname      String
-  email        String
+  nickname     String
   role         String   // "player" o "store"
   
   // Gamificación (Jugador)
@@ -94,16 +92,14 @@ model User {
   storeName    String?
   storeAddress String?
   
-  // Nuevos campos de perfil y estadísticas competitivas
-  username     String?
-  avatarUrl    String?
+  // Estadísticas competitivas
   statsJson    Json?    // Snapshot persistido de métricas competitivas del jugador
   badgesJson   Json?    // Insignias desbloqueadas por méritos medibles en torneos
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  participants TournamentParticipant[]
+  tournamentParticipants TournamentParticipant[]
   
   // Relaciones para reportes de árbitros (Jueces)
   penalizedReports JudgeReport[] @relation("PlayerPenalized")
@@ -245,4 +241,3 @@ model CardPriceHistory {
   history   Json     // Array: [ { "timestamp": 1782347289000, "priceUsd": 4.09, "priceEur": 3.88 } ]
   updatedAt DateTime @updatedAt
 }
-

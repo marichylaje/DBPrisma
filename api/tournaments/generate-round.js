@@ -137,7 +137,10 @@ module.exports = async (req, res) => {
 
         tables.push({
           tableNumber: tableCounter++,
-          players: tablePlayers.map((p) => ({ userId: p.userId, name: `${p.user.name} ${p.user.surname}` })),
+          players: tablePlayers.map((p) => ({
+            userId: p.userId,
+            name: p.user.nickname || p.user.id,
+          })),
         });
       }
     } else {
@@ -158,7 +161,10 @@ module.exports = async (req, res) => {
         const byePlayer = unassigned.splice(byeIdx, 1)[0];
         tables.push({
           tableNumber: tableCounter++,
-          players: [{ userId: byePlayer.userId, name: `${byePlayer.user.name} ${byePlayer.user.surname}` }],
+          players: [{
+            userId: byePlayer.userId,
+            name: byePlayer.user.nickname || byePlayer.user.id,
+          }],
           isBye: true,
         });
       }
@@ -186,8 +192,8 @@ module.exports = async (req, res) => {
         tables.push({
           tableNumber: tableCounter++,
           players: [
-            { userId: pA.userId, name: `${pA.user.name} ${pA.user.surname}` },
-            { userId: pB.userId, name: `${pB.user.name} ${pB.user.surname}` },
+            { userId: pA.userId, name: pA.user.nickname || pA.user.id },
+            { userId: pB.userId, name: pB.user.nickname || pB.user.id },
           ],
         });
       }

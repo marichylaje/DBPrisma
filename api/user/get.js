@@ -14,6 +14,19 @@ module.exports = async (req, res) => {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
+      select: {
+        id: true,
+        nickname: true,
+        role: true,
+        xp: true,
+        level: true,
+        storeName: true,
+        storeAddress: true,
+        createdAt: true,
+        updatedAt: true,
+        badgesJson: true,
+        statsJson: true,
+      },
     });
 
     res.status(200).json({

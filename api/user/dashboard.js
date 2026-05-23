@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
     let totalMatches = 0;
     const commanderCounts = {};
 
-    const historicoTorneos = user.participants
+    const historicoTorneos = user.tournamentParticipants
       .filter((p) => p.tournament.status === 'finished')
       .map((p) => {
         tournamentsPlayed++;
@@ -115,14 +115,14 @@ module.exports = async (req, res) => {
       ok: true,
       user: {
         id: user.id,
-        name: user.name,
-        surname: user.surname,
-        email: user.email,
+        nickname: user.nickname,
         role: user.role,
-        username: user.username,
-        avatarUrl: user.avatarUrl,
         xp: user.xp,
         level: user.level,
+        storeName: user.storeName,
+        storeAddress: user.storeAddress,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
       },
       historico_torneos: historicoTorneos,
       estadisticas_globales: stats,

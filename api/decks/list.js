@@ -7,10 +7,9 @@ module.exports = async (req, res) => {
     if (!checkSecret(req, res)) return;
 
     const userKey = String(req.query.userKey || '');
-    if (!userKey) return res.status(400).json({ error: 'userKey required' });
 
     const decks = await prisma.userDeck.findMany({
-      where: { userKey },
+      where: userKey ? { userKey } : undefined,
       orderBy: { updatedAt: 'desc' },
     });
 

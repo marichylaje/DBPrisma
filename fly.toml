@@ -1,0 +1,25 @@
+app = "deck-builder-sockets"
+primary_region = "cdg"
+
+# 💡 Agregamos esto para decirle a Node exactamente qué puerto usar
+[env]
+  PORT = "3001"
+
+[http_service]
+  internal_port = 3001 # 👈 Cambiado de 8080 a 3001
+  force_https = true
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 3001 # 👈 Cambiado de 8080 a 3001
+
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443

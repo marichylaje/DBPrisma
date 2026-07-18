@@ -21,6 +21,53 @@ const activeRooms = {};
 // Store cleanup timeouts for empty rooms to avoid memory leaks but allow reconnections
 const roomCleanups = {};
 
+const createFilledArray = (length, fillValue) => Array.from({ length }, () => fillValue);
+const createFilledMatrix = (rows, cols, fillValue) => Array.from({ length: rows }, () => createFilledArray(cols, fillValue));
+
+const normalizeRoomState = (roomCode, state = {}) => {
+  const players = Math.max(2, Number(state?.gameParams?.players) || state?.lifeCounts?.length || 6);
+  const boardSize = Math.max(6, players);
+
+  return {
+    roomCode,
+    gameParams: state.gameParams ?? null,
+    lifeCounts: Array.isArray(state.lifeCounts) && state.lifeCounts.length > 0
+      ? state.lifeCounts
+      : createFilledArray(players, 40),
+    commanderDamage: Array.isArray(state.commanderDamage) && state.commanderDamage.length > 0
+      ? createFilledMatrix(boardSize, boardSize, 0).map((row, rowIndex) => (
+          Array.isArray(state.commanderDamage[rowIndex])
+            ? createFilledArray(boardSize, 0).map((_, colIndex) => state.commanderDamage[rowIndex][colIndex] ?? 0)
+            : row
+        ))
+      : createFilledMatrix(boardSize, boardSize, 0),
+    poison: Array.isArray(state.poison) && state.poison.length > 0
+      ? state.poison
+      : createFilledArray(boardSize, 0),
+    energy: Array.isArray(state.energy) && state.energy.length > 0
+      ? state.energy
+      : createFilledArray(boardSize, 0),
+    experience: Array.isArray(state.experience) && state.experience.length > 0
+      ? state.experience
+      : createFilledArray(boardSize, 0),
+    tax: Array.isArray(state.tax) && state.tax.length > 0
+      ? state.tax
+      : createFilledArray(boardSize, 0),
+    rad: Array.isArray(state.rad) && state.rad.length > 0
+      ? state.rad
+      : createFilledArray(boardSize, 0),
+    playerColors: Array.isArray(state.playerColors) && state.playerColors.length > 0
+      ? state.playerColors
+      : [],
+    timerRemaining: Array.isArray(state.timerRemaining) && state.timerRemaining.length > 0
+      ? state.timerRemaining
+      : createFilledArray(players, 0),
+    activeTimerIndex: state.activeTimerIndex ?? null,
+    events: Array.isArray(state.events) ? state.events : [],
+    isHost: state.isHost,
+  };
+};
+
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
   let socketRoomCode = null;
@@ -70,7 +117,7 @@ io.on('connection', (socket) => {
 
     // Initialize room state if it doesn't exist
     if (!activeRooms[normalizedRoomCode]) {
-      activeRooms[normalizedRoomCode] = initialState || {
+      activeRooms[normalizedRoomCode] = normalizeRoomState(normalizedRoomCode, initialState || {
         roomCode: normalizedRoomCode,
         gameParams: null,
         lifeCounts: [],
@@ -84,19 +131,19 @@ io.on('connection', (socket) => {
         timerRemaining: [],
         activeTimerIndex: null,
         events: [],
-      };
+      });
       console.log(`Room initialized with code: ${normalizedRoomCode}`);
       console.log(`Room created by host ${socket.id}: ${normalizedRoomCode}`);
     } else if (initialState && isHostRequest) {
       // If host is reconnecting/re-joining, merge parameters just in case
-      activeRooms[normalizedRoomCode] = {
+      activeRooms[normalizedRoomCode] = normalizeRoomState(normalizedRoomCode, {
         ...activeRooms[normalizedRoomCode],
         ...initialState,
-        roomCode: normalizedRoomCode,
-      };
+      });
     }
 
     // Send latest room state back to the joining client and ensure everyone in the room has the exact same state
+    activeRooms[normalizedRoomCode] = normalizeRoomState(normalizedRoomCode, activeRooms[normalizedRoomCode]);
     io.to(normalizedRoomCode).emit('room_state_updated', activeRooms[normalizedRoomCode]);
     
     // Notify others in room
@@ -111,11 +158,10 @@ io.on('connection', (socket) => {
     console.log(`Received state sync from ${socket.id} for room ${normalizedRoomCode}:`, Object.keys(state));
 
     // Merge changes into memory
-    activeRooms[normalizedRoomCode] = {
+    activeRooms[normalizedRoomCode] = normalizeRoomState(normalizedRoomCode, {
       ...activeRooms[normalizedRoomCode],
       ...state,
-      roomCode: normalizedRoomCode,
-    };
+    });
 
     // Broadcast canonical state to everyone in the room, including sender.
     io.to(normalizedRoomCode).emit('room_state_updated', activeRooms[normalizedRoomCode]);

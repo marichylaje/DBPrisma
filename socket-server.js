@@ -25,25 +25,37 @@ io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
   let socketRoomCode = null;
 
-  // Join or create room
-  socket.on('join_room', ({ roomCode, initialState }) => {
-    if (!roomCode) return;
+  const normalizeRoomCode = (value) => String(value || '').trim().toUpperCase();
 
-    socketRoomCode = roomCode;
-    socket.join(roomCode);
-    console.log(`Socket ${socket.id} joined room: ${roomCode}`);
+  // Join or create room
+  socket.on('join_room', ({ roomCode, initialState, isHost = false }) => {
+    const normalizedRoomCode = normalizeRoomCode(roomCode);
+    if (!normalizedRoomCode) return;
+
+    // Guests cannot create new rooms; room must exist and have a started game.
+    if (!activeRooms[normalizedRoomCode] && !isHost) {
+      socket.emit('error_message', {
+        message: 'La sala no existe o el anfitrion aun no inicio la partida.',
+      });
+      console.log(`Guest ${socket.id} attempted to join non-existing room: ${normalizedRoomCode}`);
+      return;
+    }
+
+    socketRoomCode = normalizedRoomCode;
+    socket.join(normalizedRoomCode);
+    console.log(`Socket ${socket.id} joined room: ${normalizedRoomCode}`);
 
     // If there was a pending deletion timeout for this room, cancel it because a client has joined/reconnected
-    if (roomCleanups[roomCode]) {
-      clearTimeout(roomCleanups[roomCode]);
-      delete roomCleanups[roomCode];
-      console.log(`Room cleanup cancelled for room: ${roomCode} (reconnection)`);
+    if (roomCleanups[normalizedRoomCode]) {
+      clearTimeout(roomCleanups[normalizedRoomCode]);
+      delete roomCleanups[normalizedRoomCode];
+      console.log(`Room cleanup cancelled for room: ${normalizedRoomCode} (reconnection)`);
     }
 
     // Initialize room state if it doesn't exist
-    if (!activeRooms[roomCode]) {
-      activeRooms[roomCode] = initialState || {
-        roomCode,
+    if (!activeRooms[normalizedRoomCode]) {
+      activeRooms[normalizedRoomCode] = initialState || {
+        roomCode: normalizedRoomCode,
         gameParams: null,
         lifeCounts: [],
         commanderDamage: [],
@@ -57,35 +69,47 @@ io.on('connection', (socket) => {
         activeTimerIndex: null,
         events: [],
       };
-      console.log(`Room initialized with code: ${roomCode}`);
-    } else if (initialState && initialState.isHost) {
+      console.log(`Room initialized with code: ${normalizedRoomCode}`);
+    } else if (initialState && (initialState.isHost || isHost)) {
       // If host is reconnecting/re-joining, merge parameters just in case
-      activeRooms[roomCode] = {
-        ...activeRooms[roomCode],
+      activeRooms[normalizedRoomCode] = {
+        ...activeRooms[normalizedRoomCode],
         ...initialState,
+        roomCode: normalizedRoomCode,
       };
     }
 
-    // Send latest room state back to the joining client
-    socket.emit('room_state_updated', activeRooms[roomCode]);
+    if (!activeRooms[normalizedRoomCode]?.gameParams && !isHost) {
+      socket.emit('error_message', {
+        message: 'La sala existe pero la partida aun no fue iniciada por el anfitrion.',
+      });
+      console.log(`Guest ${socket.id} joined room without active game: ${normalizedRoomCode}`);
+      return;
+    }
+
+    // Send latest room state back to the joining client and ensure everyone in the room has the exact same state
+    io.to(normalizedRoomCode).emit('room_state_updated', activeRooms[normalizedRoomCode]);
     
     // Notify others in room
-    socket.to(roomCode).emit('player_joined', { socketId: socket.id });
+    socket.to(normalizedRoomCode).emit('player_joined', { socketId: socket.id });
   });
 
   // Synchronize game state
   socket.on('sync_state', ({ roomCode, state }) => {
-    if (!roomCode || !state) return;
+    const normalizedRoomCode = normalizeRoomCode(roomCode);
+    if (!normalizedRoomCode || !state) return;
+    
+    console.log(`Received state sync from ${socket.id} for room ${normalizedRoomCode}:`, Object.keys(state));
 
     // Merge changes into memory
-    activeRooms[roomCode] = {
-      ...activeRooms[roomCode],
+    activeRooms[normalizedRoomCode] = {
+      ...activeRooms[normalizedRoomCode],
       ...state,
-      roomCode, // ensure roomCode is not modified
+      roomCode: normalizedRoomCode,
     };
 
-    // Broadcast the updated state to everyone else in the room
-    socket.to(roomCode).emit('room_state_updated', activeRooms[roomCode]);
+    // Broadcast canonical state to everyone in the room, including sender.
+    io.to(normalizedRoomCode).emit('room_state_updated', activeRooms[normalizedRoomCode]);
   });
 
   // Handle disconnect

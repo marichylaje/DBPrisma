@@ -26,18 +26,34 @@ io.on('connection', (socket) => {
   let socketRoomCode = null;
 
   const normalizeRoomCode = (value) => String(value || '').trim().toUpperCase();
+  const hasHostStatePayload = (state) => {
+    if (!state || typeof state !== 'object') return false;
+    // Host usually sends a complete snapshot. Accept null gameParams as a valid host snapshot.
+    return Object.prototype.hasOwnProperty.call(state, 'gameParams') || state.isHost === true;
+  };
 
   // Join or create room
   socket.on('join_room', ({ roomCode, initialState, isHost = false }) => {
     const normalizedRoomCode = normalizeRoomCode(roomCode);
     if (!normalizedRoomCode) return;
 
+    const isHostRequest = Boolean(isHost || initialState?.isHost || hasHostStatePayload(initialState));
+    const existingRoomState = activeRooms[normalizedRoomCode];
+
     // Guests cannot create new rooms; room must exist and have a started game.
-    if (!activeRooms[normalizedRoomCode] && !isHost) {
+    if (!existingRoomState && !isHostRequest) {
       socket.emit('error_message', {
         message: 'La sala no existe o el anfitrion aun no inicio la partida.',
       });
       console.log(`Guest ${socket.id} attempted to join non-existing room: ${normalizedRoomCode}`);
+      return;
+    }
+
+    if (existingRoomState && !existingRoomState.gameParams && !isHostRequest) {
+      socket.emit('error_message', {
+        message: 'La sala existe pero la partida aun no fue iniciada por el anfitrion.',
+      });
+      console.log(`Guest ${socket.id} tried to join room without active game: ${normalizedRoomCode}`);
       return;
     }
 
@@ -70,21 +86,14 @@ io.on('connection', (socket) => {
         events: [],
       };
       console.log(`Room initialized with code: ${normalizedRoomCode}`);
-    } else if (initialState && (initialState.isHost || isHost)) {
+      console.log(`Room created by host ${socket.id}: ${normalizedRoomCode}`);
+    } else if (initialState && isHostRequest) {
       // If host is reconnecting/re-joining, merge parameters just in case
       activeRooms[normalizedRoomCode] = {
         ...activeRooms[normalizedRoomCode],
         ...initialState,
         roomCode: normalizedRoomCode,
       };
-    }
-
-    if (!activeRooms[normalizedRoomCode]?.gameParams && !isHost) {
-      socket.emit('error_message', {
-        message: 'La sala existe pero la partida aun no fue iniciada por el anfitrion.',
-      });
-      console.log(`Guest ${socket.id} joined room without active game: ${normalizedRoomCode}`);
-      return;
     }
 
     // Send latest room state back to the joining client and ensure everyone in the room has the exact same state

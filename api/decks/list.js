@@ -13,7 +13,18 @@ module.exports = async (req, res) => {
       orderBy: { updatedAt: 'desc' },
     });
 
-    res.status(200).json({ decks });
+    const responseDecks = decks.map((deck) => ({
+      ...deck,
+      sideboard: Array.isArray(deck.sideboard) ? deck.sideboard : [],
+      commander: deck.commanderName
+        ? { name: deck.commanderName, id: deck.commanderId }
+        : null,
+      partner: deck.partnerName
+        ? { name: deck.partnerName, id: deck.partnerId }
+        : null,
+    }));
+
+    res.status(200).json({ decks: responseDecks });
   } catch (e) {
     console.error('❌ /api/decks/list', e);
     res.status(500).json({ error: 'failed' });

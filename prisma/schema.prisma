@@ -47,6 +47,7 @@ model UserDeck {
 
   // Lista compacta: [{ name: "...", count: 1 }, ...]
   cards            Json
+  sideboard        Json     @default("[]")
 
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -68,6 +69,7 @@ model SharedDeck {
 
   // List: [{ name: "...", count: 1 }]
   cards            Json
+  sideboard        Json     @default("[]")
 
   createdAt        DateTime @default(now())
 

@@ -21,6 +21,7 @@ module.exports = async (req, res) => {
     // Reconstruimos objetos para compatibilidad con el frontend
     const responseDeck = {
       ...deck,
+      sideboard: Array.isArray(deck.sideboard) ? deck.sideboard : [],
       commander: { name: deck.commanderName, id: deck.commanderId },
       partner: deck.partnerName
         ? { name: deck.partnerName, id: deck.partnerId }

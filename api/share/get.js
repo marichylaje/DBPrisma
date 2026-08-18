@@ -37,6 +37,7 @@ module.exports = async (req, res) => {
     // Construct response object for frontend compatibility
     const responseShare = {
       ...sharedDeck,
+      sideboard: Array.isArray(sharedDeck.sideboard) ? sharedDeck.sideboard : [],
       commander: { name: sharedDeck.commanderName, id: sharedDeck.commanderId },
       partner: sharedDeck.partnerName
         ? { name: sharedDeck.partnerName, id: sharedDeck.partnerId }

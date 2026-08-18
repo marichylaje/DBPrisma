@@ -28,20 +28,33 @@ module.exports = async (req, res) => {
       deckName,
       deckDescription = null,
       commander = {},
+      commanderName: cName,
+      commanderId: cId,
       partner = null,
+      partnerName: pName,
+      partnerId: pId,
       cards = [],
+      sideboard = [],
       sharedType = 'QR',
       tournamentId = null,
     } = req.body || {};
 
+    const finalCommanderName = commander?.name || cName;
+    const finalCommanderId = commander?.id || cId;
+    const finalPartnerName = partner?.name || pName;
+    const finalPartnerId = partner?.id || pId;
+
     if (!deckName) {
       return res.status(400).json({ error: 'deckName is required' });
     }
-    if (!commander?.name) {
+    if (!finalCommanderName) {
       return res.status(400).json({ error: 'commander name is required' });
     }
     if (!Array.isArray(cards)) {
       return res.status(400).json({ error: 'cards must be an array' });
+    }
+    if (!Array.isArray(sideboard)) {
+      return res.status(400).json({ error: 'sideboard must be an array' });
     }
 
     const created = await prisma.sharedDeck.create({
@@ -49,11 +62,12 @@ module.exports = async (req, res) => {
         userKey,
         deckName,
         deckDescription,
-        commanderName: commander.name,
-        commanderId: commander.id || null,
-        partnerName: partner?.name || null,
-        partnerId: partner?.id || null,
+        commanderName: finalCommanderName,
+        commanderId: finalCommanderId ?? null,
+        partnerName: finalPartnerName ?? null,
+        partnerId: finalPartnerId ?? null,
         cards,
+        sideboard,
         sharedType,
         tournamentId,
       },

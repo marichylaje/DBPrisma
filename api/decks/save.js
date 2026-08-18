@@ -18,6 +18,7 @@ module.exports = async (req, res) => {
       partnerName: pName,   // soporte plano
       partnerId: pId,       // soporte plano
       cards = [],
+      sideboard = [],
       deckId = null,
       oldDeckName = null
     } = req.body || {};
@@ -36,6 +37,9 @@ module.exports = async (req, res) => {
     if (!Array.isArray(cards)) {
       return res.status(400).json({ error: 'cards must be an array' });
     }
+    if (!Array.isArray(sideboard)) {
+      return res.status(400).json({ error: 'sideboard must be an array' });
+    }
 
     // Modo A: actualizar por id si viene
     if (deckId) {
@@ -51,6 +55,7 @@ module.exports = async (req, res) => {
           partnerName: finalPartnerName ?? null,
           partnerId: finalPartnerId ?? null,
           cards,
+          sideboard,
         },
       });
       return res.status(200).json({ ok: true, deck: updated });
@@ -71,6 +76,7 @@ module.exports = async (req, res) => {
         partnerName: finalPartnerName ?? null,
         partnerId: finalPartnerId ?? null,
         cards,
+        sideboard,
       },
       update: {
         deckName, // permite renombrar (si usaste oldDeckName)
@@ -81,6 +87,7 @@ module.exports = async (req, res) => {
         partnerName: finalPartnerName ?? null,
         partnerId: finalPartnerId ?? null,
         cards,
+        sideboard,
       },
     });
 

@@ -15,6 +15,7 @@ module.exports = async (req, res) => {
 
     const responseDecks = decks.map((deck) => ({
       ...deck,
+      downloadCount: Number(deck.downloadCount ?? 0),
       sideboard: Array.isArray(deck.sideboard) ? deck.sideboard : [],
       commander: deck.commanderName
         ? { name: deck.commanderName, id: deck.commanderId }

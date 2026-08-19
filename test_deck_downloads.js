@@ -15,13 +15,13 @@ assert.deepStrictEqual(parseDeckKey('cloud:deck-123'), {
 assert.deepStrictEqual(parseDeckKey('precon:Commander Masters'), {
   type: 'precon',
   id: null,
-  deckKey: 'Commander Masters',
+  deckKey: 'precon:Commander Masters',
 });
 
 assert.deepStrictEqual(parseDeckKey('influencer:SomePlayer:Mono Red Aggro'), {
   type: 'influencer',
   id: null,
-  deckKey: 'SomePlayer:Mono Red Aggro',
+  deckKey: 'influencer:SomePlayer:Mono Red Aggro',
 });
 
 assert.strictEqual(isDeckDownloadKey('cloud:deck-123'), true);

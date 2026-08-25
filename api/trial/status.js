@@ -1,7 +1,10 @@
-// Muestra SOLO el estado del trial (no mezcla con suscripción)
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
+// Muestra SOLO el estado del trial (no mezcla con suscripciÃ³n)
 const { prisma } = require('../../lib/prisma');
 
 module.exports = async (req, res) => {
+  applyCors(req, res);
+  if (handleCorsPreflight(req, res)) return;
   if (req.method !== 'GET') return res.status(405).end();
   if (process.env.APP_BACKEND_SECRET && req.headers['x-app-secret'] !== process.env.APP_BACKEND_SECRET) {
     return res.status(401).json({ error: 'unauthorized' });
@@ -24,3 +27,4 @@ module.exports = async (req, res) => {
     expiryMs: trialActive ? ent.trialExpiry.getTime() : null,
   });
 };
+

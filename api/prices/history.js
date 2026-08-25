@@ -1,7 +1,10 @@
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 
 module.exports = async (req, res) => {
+  applyCors(req, res);
+  if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'GET') return res.status(405).end();
     if (!checkSecret(req, res)) return;
@@ -21,7 +24,8 @@ module.exports = async (req, res) => {
       history: record && Array.isArray(record.history) ? record.history : [],
     });
   } catch (e) {
-    console.error('❌ /api/prices/history', e);
+    console.error('âŒ /api/prices/history', e);
     res.status(500).json({ error: 'failed', details: e.message });
   }
 };
+

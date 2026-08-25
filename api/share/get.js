@@ -1,7 +1,10 @@
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 
 module.exports = async (req, res) => {
+  applyCors(req, res);
+  if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'GET') return res.status(405).end();
     if (!checkSecret(req, res)) return;
@@ -27,9 +30,9 @@ module.exports = async (req, res) => {
         await prisma.sharedDeck.delete({
           where: { id },
         });
-        console.log(`🧹 Reactively deleted expired shared deck ID: ${id}`);
+        console.log(`ðŸ§¹ Reactively deleted expired shared deck ID: ${id}`);
       } catch (deleteError) {
-        console.error('❌ Failed reactive delete of expired deck:', deleteError);
+        console.error('âŒ Failed reactive delete of expired deck:', deleteError);
       }
       return res.status(404).json({ error: 'expired' });
     }
@@ -46,7 +49,8 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ share: responseShare });
   } catch (e) {
-    console.error('❌ /api/share/get', e);
+    console.error('âŒ /api/share/get', e);
     res.status(500).json({ error: 'failed' });
   }
 };
+

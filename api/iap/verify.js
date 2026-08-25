@@ -1,8 +1,11 @@
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { verifyAppleReceipt } = require('../../lib/iap-apple');
 const { verifyAndroidSub } = require('../../lib/iap-google');
 
 module.exports = async (req, res) => {
+  applyCors(req, res);
+  if (handleCorsPreflight(req, res)) return;
   if (req.method !== 'POST') return res.status(405).end();
   if (process.env.APP_BACKEND_SECRET && req.headers['x-app-secret'] !== process.env.APP_BACKEND_SECRET) {
     return res.status(401).json({ error: 'unauthorized' });
@@ -52,3 +55,4 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: 'verify failed' });
   }
 };
+

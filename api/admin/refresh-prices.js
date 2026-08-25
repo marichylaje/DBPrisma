@@ -1,3 +1,4 @@
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 
@@ -28,6 +29,8 @@ function getScryfallIdentifier(cardKey) {
 }
 
 module.exports = async (req, res) => {
+  applyCors(req, res);
+  if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
@@ -52,7 +55,7 @@ module.exports = async (req, res) => {
       return res.status(200).json({ ok: true, message: 'No cards in collections to update.' });
     }
 
-    console.log(`[PriceRefresh] Encontradas ${cardsArray.length} cartas únicas para actualizar.`);
+    console.log(`[PriceRefresh] Encontradas ${cardsArray.length} cartas Ãºnicas para actualizar.`);
 
     // Obtener todos los historiales existentes de estas cartas en una sola consulta
     const existingRecords = await prisma.cardPriceHistory.findMany({
@@ -62,7 +65,7 @@ module.exports = async (req, res) => {
     });
     const historyMap = new Map(existingRecords.map((r) => [r.cardKey, r.history]));
 
-    // 2) Dividir en lotes de 75 (Límite de Scryfall por request en POST /cards/collection)
+    // 2) Dividir en lotes de 75 (LÃ­mite de Scryfall por request en POST /cards/collection)
     const batches = chunk(cardsArray, 75);
     let updatedCount = 0;
 
@@ -97,7 +100,7 @@ module.exports = async (req, res) => {
 
           if (usd === null && eur === null) continue;
 
-          // Buscar cuáles de nuestras claves de carta coinciden con esta respuesta de Scryfall
+          // Buscar cuÃ¡les de nuestras claves de carta coinciden con esta respuesta de Scryfall
           for (const key of cardsArray) {
             let matches = false;
 
@@ -169,10 +172,10 @@ module.exports = async (req, res) => {
           }
         }
       } catch (err) {
-        console.error(`[PriceRefresh] Excepción procesando lote ${i + 1}:`, err);
+        console.error(`[PriceRefresh] ExcepciÃ³n procesando lote ${i + 1}:`, err);
       }
 
-      // Respetar límites de Scryfall
+      // Respetar lÃ­mites de Scryfall
       await sleep(150);
     }
 
@@ -181,7 +184,8 @@ module.exports = async (req, res) => {
       message: `Precios actualizados exitosamente. Total registros insertados: ${updatedCount}`,
     });
   } catch (e) {
-    console.error('❌ /api/admin/refresh-prices', e);
+    console.error('âŒ /api/admin/refresh-prices', e);
     res.status(500).json({ error: 'failed', details: e.message });
   }
 };
+

@@ -1,3 +1,4 @@
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 const {
@@ -6,6 +7,8 @@ const {
 } = require('../../lib/playerGamification');
 
 module.exports = async (req, res) => {
+  applyCors(req, res);
+  if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
@@ -69,7 +72,7 @@ module.exports = async (req, res) => {
       // B. Process each participant's XP points
       for (const p of tournament.participants) {
         if (p.pointsProcessed) {
-          console.log(`⚠️ Participant ${p.id} already processed. Skipping.`);
+          console.log(`âš ï¸ Participant ${p.id} already processed. Skipping.`);
           continue;
         }
 
@@ -145,7 +148,8 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, result });
   } catch (e) {
-    console.error('❌ /api/tournaments/finalize error:', e);
+    console.error('âŒ /api/tournaments/finalize error:', e);
     res.status(500).json({ error: 'Failed to finalize tournament and process XP' });
   }
 };
+

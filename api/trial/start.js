@@ -1,7 +1,10 @@
-// Inicia un trial de N días (default 5). Si ya fue concedido, devuelve el existente.
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
+// Inicia un trial de N dÃ­as (default 5). Si ya fue concedido, devuelve el existente.
 const { prisma } = require('../../lib/prisma');
 
 module.exports = async (req, res) => {
+  applyCors(req, res);
+  if (handleCorsPreflight(req, res)) return;
   if (req.method !== 'POST') return res.status(405).end();
   if (process.env.APP_BACKEND_SECRET && req.headers['x-app-secret'] !== process.env.APP_BACKEND_SECRET) {
     return res.status(401).json({ error: 'unauthorized' });
@@ -44,3 +47,4 @@ module.exports = async (req, res) => {
     expiryMs: saved.trialExpiry.getTime(),
   });
 };
+

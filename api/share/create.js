@@ -1,7 +1,10 @@
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 
 module.exports = async (req, res) => {
+  applyCors(req, res);
+  if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
@@ -17,10 +20,10 @@ module.exports = async (req, res) => {
         },
       });
       if (deleteResult.count > 0) {
-        console.log(`🧹 Cleaned up ${deleteResult.count} expired shared decks.`);
+        console.log(`ðŸ§¹ Cleaned up ${deleteResult.count} expired shared decks.`);
       }
     } catch (cleanupError) {
-      console.error('❌ Failed reactive cleanup of shared decks:', cleanupError);
+      console.error('âŒ Failed reactive cleanup of shared decks:', cleanupError);
     }
 
     const {
@@ -75,7 +78,8 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, share: created });
   } catch (e) {
-    console.error('❌ /api/share/create', e);
+    console.error('âŒ /api/share/create', e);
     res.status(500).json({ error: 'failed' });
   }
 };
+

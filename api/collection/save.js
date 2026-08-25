@@ -1,7 +1,10 @@
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 
 module.exports = async (req, res) => {
+  applyCors(req, res);
+  if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
@@ -28,7 +31,8 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, collection: upserted });
   } catch (e) {
-    console.error('❌ /api/collection/save', e);
+    console.error('âŒ /api/collection/save', e);
     res.status(500).json({ error: 'failed', details: e.message });
   }
 };
+

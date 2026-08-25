@@ -1,7 +1,10 @@
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 
 module.exports = async (req, res) => {
+  applyCors(req, res);
+  if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'GET') return res.status(405).end();
     if (!checkSecret(req, res)) return;
@@ -46,8 +49,8 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Invalid latitude or longitude values' });
     }
 
-    // Consulta SQL nativa con la Fórmula de Haversine para filtrar en un rango de 100km
-    // 6371 es el radio de la Tierra en kilómetros.
+    // Consulta SQL nativa con la FÃ³rmula de Haversine para filtrar en un rango de 100km
+    // 6371 es el radio de la Tierra en kilÃ³metros.
     const tournaments = await prisma.$queryRaw`
       SELECT *, (
         6371 * acos(
@@ -65,7 +68,7 @@ module.exports = async (req, res) => {
       ORDER BY distance ASC;
     `;
 
-    // Para cada torneo, buscamos también la cuenta de sus participantes
+    // Para cada torneo, buscamos tambiÃ©n la cuenta de sus participantes
     const tournamentIds = tournaments.map(t => t.id);
     const participants = await prisma.tournamentParticipant.findMany({
       where: {
@@ -74,7 +77,7 @@ module.exports = async (req, res) => {
     });
 
     const enrichedTournaments = tournaments.map(t => {
-      // Convertimos el BigInt de la distancia (si lo fuera) o Float a número simple js
+      // Convertimos el BigInt de la distancia (si lo fuera) o Float a nÃºmero simple js
       const distNum = Number(t.distance);
       return {
         ...t,
@@ -85,7 +88,8 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, tournaments: enrichedTournaments });
   } catch (e) {
-    console.error('❌ /api/tournaments/search error:', e);
+    console.error('âŒ /api/tournaments/search error:', e);
     res.status(500).json({ error: 'Failed to search nearby tournaments' });
   }
 };
+

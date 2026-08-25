@@ -1,7 +1,10 @@
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 
 module.exports = async (req, res) => {
+  applyCors(req, res);
+  if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
@@ -38,7 +41,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Missing required tournament creation fields' });
     }
 
-    // Validación defensiva de roles: comprobar que la tienda existe y tiene el rol correcto
+    // ValidaciÃ³n defensiva de roles: comprobar que la tienda existe y tiene el rol correcto
     const storeUser = await prisma.user.findUnique({
       where: { id: storeId }
     });
@@ -51,7 +54,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Only registered store accounts can organize tournaments' });
     }
 
-    // Validación de tope diario: Máximo 5 torneos creados hoy
+    // ValidaciÃ³n de tope diario: MÃ¡ximo 5 torneos creados hoy
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
@@ -107,7 +110,8 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, tournament: created });
   } catch (e) {
-    console.error('❌ /api/tournaments/create error:', e);
+    console.error('âŒ /api/tournaments/create error:', e);
     res.status(500).json({ error: 'Failed to create tournament' });
   }
 };
+

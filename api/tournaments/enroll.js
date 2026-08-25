@@ -1,7 +1,10 @@
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 
 module.exports = async (req, res) => {
+  applyCors(req, res);
+  if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
@@ -92,7 +95,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, participant });
   } catch (e) {
-    console.error('❌ /api/tournaments/enroll error:', e);
+    console.error('âŒ /api/tournaments/enroll error:', e);
     // Control compound unique constraint violations (already registered)
     if (e.code === 'P2002') {
       return res.status(400).json({ error: 'Player is already registered in this tournament' });
@@ -100,3 +103,4 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: 'Failed to enroll in tournament' });
   }
 };
+

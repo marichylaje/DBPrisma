@@ -1,7 +1,10 @@
-// Estado unificado de acceso premium (suscripción válida o trial activo)
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
+// Estado unificado de acceso premium (suscripciÃ³n vÃ¡lida o trial activo)
 const { prisma } = require('../lib/prisma');
 
 module.exports = async (req, res) => {
+  applyCors(req, res);
+  if (handleCorsPreflight(req, res)) return;
   if (req.method !== 'GET') return res.status(405).end();
   if (process.env.APP_BACKEND_SECRET && req.headers['x-app-secret'] !== process.env.APP_BACKEND_SECRET) {
     return res.status(401).json({ error: 'unauthorized' });
@@ -31,3 +34,4 @@ module.exports = async (req, res) => {
     expiryMs,
   });
 };
+

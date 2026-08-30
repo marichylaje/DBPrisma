@@ -90,8 +90,10 @@ model SharedDeck {
 }
 
 model User {
-  id           String   @id // Proveniente del servicio de Autenticación (Firebase/Supabase)
+  id           String   @id // Proveniente del servicio de Autenticación (Firebase/Supabase) o generado por nosotros
   nickname     String
+  email        String?  @unique
+  passwordHash String?
   role         String   // "player" o "store"
   
   // Gamificación (Jugador)

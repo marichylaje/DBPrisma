@@ -1,5 +1,4 @@
-﻿// prisma/schema.prisma
-datasource db {
+﻿datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")         // Accelerate (runtime)
   directUrl = env("DIRECT_DATABASE_URL")  // Neon directo (migraciones)

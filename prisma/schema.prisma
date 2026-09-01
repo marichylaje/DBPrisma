@@ -9,27 +9,27 @@ generator client {
 }
 
 model UserEntitlement {
-  userKey              String   @id
+  userKey              String    @id
 
-  // SuscripciÃ³n
-  subActive            Boolean  @default(false)
+  // Suscripción
+  subActive            Boolean   @default(false)
   subPlatform          String?
   subProductId         String?
   subExpiry            DateTime?
 
   // Android pendiente
-  pendingAndroid       Boolean  @default(false)
+  pendingAndroid       Boolean   @default(false)
   androidPurchaseToken String?
   lastVerifyAt         DateTime?
   verifyError          String?
 
   // Trial
-  trialGranted         Boolean  @default(false)
+  trialGranted         Boolean   @default(false)
   trialStart           DateTime?
   trialExpiry          DateTime?
 
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 }
 
 model UserDeck {
@@ -49,51 +49,52 @@ model UserDeck {
   downloadCount    Int      @default(0)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+
   @@index([userKey])
   @@index([userId])
   @@unique([userKey, deckName])
 }
 
 model DeckDownload {
-  deckKey    String   @id
-  count      Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  deckKey   String   @id
+  count     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model SharedDeck {
-  id               String   @id @default(cuid())
-  userKey          String?
-  deckName         String
-  deckDescription  String?  @db.Text
+  id              String   @id @default(cuid())
+  userKey         String?
+  deckName        String
+  deckDescription String?  @db.Text
 
-  commanderName    String
-  commanderId      String?
-  partnerName      String?
-  partnerId        String?
+  commanderName   String
+  commanderId     String?
+  partnerName     String?
+  partnerId       String?
 
   // List: [{ name: "...", count: 1 }]
-  cards            Json
-  sideboard        Json     @default("[]")
+  cards           Json
+  sideboard       Json     @default("[]")
 
-  createdAt        DateTime @default(now())
+  createdAt       DateTime @default(now())
 
   // Extensibility for tournaments
-  sharedType       String   @default("QR") // "QR", "TOURNAMENT", etc.
-  tournamentId     String?
+  sharedType      String   @default("QR") // "QR", "TOURNAMENT", etc.
+  tournamentId    String?
 
   @@index([createdAt])
   @@index([tournamentId])
 }
 
 model User {
-  id           String   @id // Proveniente del servicio de AutenticaciÃ³n (Firebase/Supabase) o generado por nosotros
+  id           String   @id // Proveniente del servicio de Autenticación (Firebase/Supabase) o generado por nosotros
   nickname     String
   email        String?  @unique
   passwordHash String?
   role         String   // "player" o "store"
   
-  // GamificaciÃ³n (Jugador)
+  // Gamificación (Jugador)
   xp           Int      @default(0)
   level        Int      @default(1)
   
@@ -101,43 +102,43 @@ model User {
   storeName    String?
   storeAddress String?
   
-  // EstadÃ­sticas competitivas
-  statsJson    Json?    // Snapshot persistido de mÃ©tricas competitivas del jugador
-  badgesJson   Json?    // Insignias desbloqueadas por mÃ©ritos medibles en torneos
+  // Estadísticas competitivas
+  statsJson    Json?    // Snapshot persistido de métricas competitivas del jugador
+  badgesJson   Json?    // Insignias desbloqueadas por méritos medibles en torneos
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   tournamentParticipants TournamentParticipant[]
   
-  // Relaciones para reportes de Ã¡rbitros (Jueces)
+  // Relaciones para reportes de árbitros (Jueces)
   penalizedReports JudgeReport[] @relation("PlayerPenalized")
   judgedReports    JudgeReport[] @relation("JudgeSanc")
 }
 
 model Tournament {
-  id           String   @id @default(cuid())
-  title        String
-  description  String?  @db.Text
-  format       String   // "commander_multiplayer", "duel_1vs1", "two_headed_giant", "draft"
-  status       String   @default("created") // "created", "active", "finished"
-  powerLevel   String   // "casual", "optimized", "cedh"
+  id               String   @id @default(cuid())
+  title            String
+  description      String?  @db.Text
+  format           String   // "commander_multiplayer", "duel_1vs1", "two_headed_giant", "draft"
+  status           String   @default("created") // "created", "active", "finished"
+  powerLevel       String   // "casual", "optimized", "cedh"
   
-  // UbicaciÃ³n fÃ­sica
-  locationName String
-  latitude     Float
-  longitude    Float
+  // Ubicación física
+  locationName     String
+  latitude         Float
+  longitude        Float
   
-  entryFee     Int      // En cÃ©ntimos (ej: 500 = â‚¬5.00)
-  maxPlayers   Int
-  startDate    DateTime
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  entryFee         Int      // En céntimos (ej: 500 = €5.00)
+  maxPlayers       Int
+  startDate        DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
   
-  storeId      String   // ID de la tienda organizadora
+  storeId          String   // ID de la tienda organizadora
   
-  // Nuevos campos logÃ­sticos y configuraciones avanzadas
-  roomCode         String?  @unique // CÃ³digo de sala, ej: "CMD-742"
+  // Nuevos campos logísticos y configuraciones avanzadas
+  roomCode         String?  @unique // Código de sala, ej: "CMD-742"
   bannerUrl        String?
   isPhysical       Boolean  @default(true)
   address          String?
@@ -163,35 +164,35 @@ model Tournament {
 }
 
 model TournamentParticipant {
-  id              String     @id @default(cuid())
-  tournamentId    String
-  tournament      Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  id                  String     @id @default(cuid())
+  tournamentId        String
+  tournament          Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
   
-  userId          String
-  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId              String
+  user                User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  deckSnapshot    Json?      // Copia profunda del mazo activo al inscribirse
-  roundsReport    String[]   // Lista de resultados por ronda (ej: ["2-1", "2-0"])
-  openToTrade     Boolean    @default(false)
-  pointsProcessed Boolean    @default(false) // Escudo de doble pago
+  deckSnapshot        Json?      // Copia profunda del mazo activo al inscribirse
+  roundsReport        String[]   // Lista de resultados por ronda (ej: ["2-1", "2-0"])
+  openToTrade         Boolean    @default(false)
+  pointsProcessed     Boolean    @default(false) // Escudo de doble pago
   
   // Nuevos campos financieros y de decklists
-  paymentStatus   String     @default("Pending") // "Pending" | "Paid" | "Refunded"
-  paymentMethod   String?    // "Stripe" | "Cash" | "Points"
-  decklistUrl     String?    // Moxfield URL, etc.
+  paymentStatus       String     @default("Pending") // "Pending" | "Paid" | "Refunded"
+  paymentMethod       String?    // "Stripe" | "Cash" | "Points"
+  decklistUrl         String?    // Moxfield URL, etc.
   commanderScryfallId String?
-  decklistValidated Boolean  @default(false)
+  decklistValidated   Boolean    @default(false)
   
-  // EstadÃ­sticas del jugador en este torneo especÃ­fico
-  matchPoints     Int        @default(0)
-  omwPercentage   Float      @default(0.0)
-  gwPercentage    Float      @default(0.0)
-  finalPosition   Int?
-  isDropped       Boolean    @default(false)
+  // Estadísticas del jugador en este torneo específico
+  matchPoints         Int        @default(0)
+  omwPercentage       Float      @default(0.0)
+  gwPercentage        Float      @default(0.0)
+  finalPosition       Int?
+  isDropped           Boolean    @default(false)
 
-  createdAt       DateTime   @default(now())
+  createdAt           DateTime   @default(now())
   
-  @@unique([tournamentId, userId]) // Un jugador no puede inscribirse dos veces
+  @@unique([tournamentId, userId])
 }
 
 model JudgeReport {
@@ -274,4 +275,3 @@ model AnalyticsEvent {
   @@index([sessionId, occurredAt])
   @@index([screenName, occurredAt])
 }
-

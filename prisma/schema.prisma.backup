@@ -1,0 +1,279 @@
+// prisma/schema.prisma
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")         // Accelerate (runtime)
+  directUrl = env("DIRECT_DATABASE_URL")  // Neon directo (migraciones)
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model UserEntitlement {
+  userKey              String   @id
+
+  // Suscripción
+  subActive            Boolean  @default(false)
+  subPlatform          String?
+  subProductId         String?
+  subExpiry            DateTime?
+
+  // Android pendiente
+  pendingAndroid       Boolean  @default(false)
+  androidPurchaseToken String?
+  lastVerifyAt         DateTime?
+  verifyError          String?
+
+  // Trial
+  trialGranted         Boolean  @default(false)
+  trialStart           DateTime?
+  trialExpiry          DateTime?
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+}
+
+model UserDeck {
+  id               String   @id @default(cuid())
+  userKey          String
+  deckName         String
+  deckDescription  String?  @db.Text
+  instagram        String?
+
+  commanderName    String
+  commanderId      String?  // Scryfall ID si lo tienes
+  partnerName      String?
+  partnerId        String?  // Scryfall ID si lo tienes
+
+  // Lista compacta: [{ name: "...", count: 1 }, ...]
+  cards            Json
+  sideboard        Json     @default("[]")
+  downloadCount    Int      @default(0)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([userKey])
+  @@unique([userKey, deckName]) // 1 nombre único por usuario
+}
+
+model DeckDownload {
+  deckKey    String   @id
+  count      Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model SharedDeck {
+  id               String   @id @default(cuid())
+  userKey          String?
+  deckName         String
+  deckDescription  String?  @db.Text
+
+  commanderName    String
+  commanderId      String?
+  partnerName      String?
+  partnerId        String?
+
+  // List: [{ name: "...", count: 1 }]
+  cards            Json
+  sideboard        Json     @default("[]")
+
+  createdAt        DateTime @default(now())
+
+  // Extensibility for tournaments
+  sharedType       String   @default("QR") // "QR", "TOURNAMENT", etc.
+  tournamentId     String?
+
+  @@index([createdAt])
+  @@index([tournamentId])
+}
+
+model User {
+  id           String   @id // Proveniente del servicio de Autenticación (Firebase/Supabase) o generado por nosotros
+  nickname     String
+  email        String?  @unique
+  passwordHash String?
+  role         String   // "player" o "store"
+  
+  // Gamificación (Jugador)
+  xp           Int      @default(0)
+  level        Int      @default(1)
+  
+  // Perfil de Tienda
+  storeName    String?
+  storeAddress String?
+  
+  // Estadísticas competitivas
+  statsJson    Json?    // Snapshot persistido de métricas competitivas del jugador
+  badgesJson   Json?    // Insignias desbloqueadas por méritos medibles en torneos
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tournamentParticipants TournamentParticipant[]
+  
+  // Relaciones para reportes de árbitros (Jueces)
+  penalizedReports JudgeReport[] @relation("PlayerPenalized")
+  judgedReports    JudgeReport[] @relation("JudgeSanc")
+}
+
+model Tournament {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?  @db.Text
+  format       String   // "commander_multiplayer", "duel_1vs1", "two_headed_giant", "draft"
+  status       String   @default("created") // "created", "active", "finished"
+  powerLevel   String   // "casual", "optimized", "cedh"
+  
+  // Ubicación física
+  locationName String
+  latitude     Float
+  longitude    Float
+  
+  entryFee     Int      // En céntimos (ej: 500 = €5.00)
+  maxPlayers   Int
+  startDate    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  storeId      String   // ID de la tienda organizadora
+  
+  // Nuevos campos logísticos y configuraciones avanzadas
+  roomCode         String?  @unique // Código de sala, ej: "CMD-742"
+  bannerUrl        String?
+  isPhysical       Boolean  @default(true)
+  address          String?
+  divisa           String   @default("EUR")
+  allowProxies     Boolean  @default(true)
+  proxyLimit       Int      @default(10)
+  requireDecklist  Boolean  @default(true)
+  rulesEnforcement String   @default("Regular") // "Casual" | "Regular" | "Competitive"
+  
+  // Rondas y estructura del torneo
+  roundType        String   @default("Swiss") // "Swiss", "Swiss + Top 4 Cut", "Single Elimination"
+  currentRound     Int      @default(0)
+  waitlist         Json?    // Array de userIds: ["player-x", "player-y"]
+  admins           Json?    // Array de userIds de co-administradores: ["admin-1", "admin-2"]
+  
+  // Premios
+  prizePool        String?
+  prizeDetail      String?  @db.Text
+
+  participants TournamentParticipant[]
+  matches      TournamentMatch[]
+  judgeReports JudgeReport[]
+}
+
+model TournamentParticipant {
+  id              String     @id @default(cuid())
+  tournamentId    String
+  tournament      Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  
+  userId          String
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  deckSnapshot    Json?      // Copia profunda del mazo activo al inscribirse
+  roundsReport    String[]   // Lista de resultados por ronda (ej: ["2-1", "2-0"])
+  openToTrade     Boolean    @default(false)
+  pointsProcessed Boolean    @default(false) // Escudo de doble pago
+  
+  // Nuevos campos financieros y de decklists
+  paymentStatus   String     @default("Pending") // "Pending" | "Paid" | "Refunded"
+  paymentMethod   String?    // "Stripe" | "Cash" | "Points"
+  decklistUrl     String?    // Moxfield URL, etc.
+  commanderScryfallId String?
+  decklistValidated Boolean  @default(false)
+  
+  // Estadísticas del jugador en este torneo específico
+  matchPoints     Int        @default(0)
+  omwPercentage   Float      @default(0.0)
+  gwPercentage    Float      @default(0.0)
+  finalPosition   Int?
+  isDropped       Boolean    @default(false)
+
+  createdAt       DateTime   @default(now())
+  
+  @@unique([tournamentId, userId]) // Un jugador no puede inscribirse dos veces
+}
+
+model JudgeReport {
+  id             String     @id @default(cuid())
+  tournamentId   String
+  tournament     Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  
+  round          Int
+  tableNumber    Int?
+  
+  playerId       String
+  player         User       @relation("PlayerPenalized", fields: [playerId], references: [id], onDelete: Cascade)
+  
+  infractionType String     // "Warning" | "Game_Loss" | "Match_Loss" | "Disqualification"
+  reason         String     @db.Text
+  
+  judgeId        String
+  judge          User       @relation("JudgeSanc", fields: [judgeId], references: [id], onDelete: Cascade)
+  
+  privateNotes   String?    @db.Text
+  createdAt      DateTime   @default(now())
+}
+
+model TournamentMatch {
+  id           String     @id @default(cuid())
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  
+  round        Int
+  tableNumber  Int
+  
+  // Jugadores en esta mesa. Formato: [{ "userId": "...", "name": "..." }, ...]
+  players      Json
+  
+  // Resultados reportados. Formato: { "score": "2-1-0", "winnerId": "...", "playerScores": [{ "userId": "...", "wins": 2 }] }
+  results      Json?
+  
+  status       String     @default("pending") // "pending" | "reported" | "verified"
+  reportedBy   String?
+  
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([tournamentId, round, tableNumber])
+}
+
+model UserCollection {
+  userKey   String   @id
+  cards     Json     // Arreglo de strings: ["Black Lotus|vma|4", "Aether Vial", ...]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CardPriceHistory {
+  cardKey   String   @id // Clave identificadora de la carta (ej. "Black Lotus|vma|4" o "Aether Vial")
+  history   Json     // Array: [ { "timestamp": 1782347289000, "priceUsd": 4.09, "priceEur": 3.88 } ]
+  updatedAt DateTime @updatedAt
+}
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  userKey    String
+  sessionId  String
+  eventName  String
+  screenName String?
+  flowName   String?
+  platform   String
+  appVersion String
+  language   String?
+  region     String?
+  role       String?
+  isPaidUser Boolean?
+  occurredAt DateTime
+  properties Json?
+  createdAt  DateTime @default(now())
+
+  @@index([occurredAt])
+  @@index([eventName, occurredAt])
+  @@index([userKey, occurredAt])
+  @@index([sessionId, occurredAt])
+  @@index([screenName, occurredAt])
+}

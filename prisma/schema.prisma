@@ -89,6 +89,7 @@ model SharedDeck {
 
 model User {
   decks        UserDeck[]
+  collections  UserCollection[]
   id           String     @id // Proveniente del servicio de Autenticación (Firebase/Supabase) o generado por nosotros
   nickname     String
   email        String?    @unique
@@ -242,9 +243,13 @@ model TournamentMatch {
 
 model UserCollection {
   userKey   String   @id
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   cards     Json // Arreglo de strings: ["Black Lotus|vma|4", "Aether Vial", ...]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 model CardPriceHistory {

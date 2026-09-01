@@ -36,24 +36,16 @@ model UserEntitlement {
 model UserDeck {
   id               String   @id @default(cuid())
   userKey          String
-  userId           String?
-  user             User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   deckName         String
   deckDescription  String?  @db.Text
   instagram        String?
+
   commanderName    String
-  commanderId      String?
+  commanderId      String?  // Scryfall ID si lo tienes
   partnerName      String?
-  partnerId        String?
-  cards            Json
-  sideboard        Json     @default("[]")
-  downloadCount    Int      @default(0)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  @@index([userKey])
-  @@index([userId])
-  @@unique([userKey, deckName])
-}, ...]
+  partnerId        String?  // Scryfall ID si lo tienes
+
+  // Lista compacta: [{ name: "...", count: 1 }, ...]
   cards            Json
   sideboard        Json     @default("[]")
   downloadCount    Int      @default(0)
@@ -285,4 +277,3 @@ model AnalyticsEvent {
   @@index([sessionId, occurredAt])
   @@index([screenName, occurredAt])
 }
-

@@ -1,4 +1,4 @@
-// prisma/schema.prisma
+﻿// prisma/schema.prisma
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")         // Accelerate (runtime)
@@ -12,7 +12,7 @@ generator client {
 model UserEntitlement {
   userKey              String   @id
 
-  // Suscripción
+  // SuscripciÃ³n
   subActive            Boolean  @default(false)
   subPlatform          String?
   subProductId         String?
@@ -53,16 +53,6 @@ model UserDeck {
   @@index([userKey])
   @@index([userId])
   @@unique([userKey, deckName])
-}, ...]
-  cards            Json
-  sideboard        Json     @default("[]")
-  downloadCount    Int      @default(0)
-
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-
-  @@index([userKey])
-  @@unique([userKey, deckName]) // 1 nombre único por usuario
 }
 
 model DeckDownload {
@@ -98,13 +88,13 @@ model SharedDeck {
 }
 
 model User {
-  id           String   @id // Proveniente del servicio de Autenticación (Firebase/Supabase) o generado por nosotros
+  id           String   @id // Proveniente del servicio de AutenticaciÃ³n (Firebase/Supabase) o generado por nosotros
   nickname     String
   email        String?  @unique
   passwordHash String?
   role         String   // "player" o "store"
   
-  // Gamificación (Jugador)
+  // GamificaciÃ³n (Jugador)
   xp           Int      @default(0)
   level        Int      @default(1)
   
@@ -112,16 +102,16 @@ model User {
   storeName    String?
   storeAddress String?
   
-  // Estadísticas competitivas
-  statsJson    Json?    // Snapshot persistido de métricas competitivas del jugador
-  badgesJson   Json?    // Insignias desbloqueadas por méritos medibles en torneos
+  // EstadÃ­sticas competitivas
+  statsJson    Json?    // Snapshot persistido de mÃ©tricas competitivas del jugador
+  badgesJson   Json?    // Insignias desbloqueadas por mÃ©ritos medibles en torneos
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   tournamentParticipants TournamentParticipant[]
   
-  // Relaciones para reportes de árbitros (Jueces)
+  // Relaciones para reportes de Ã¡rbitros (Jueces)
   penalizedReports JudgeReport[] @relation("PlayerPenalized")
   judgedReports    JudgeReport[] @relation("JudgeSanc")
 }
@@ -134,12 +124,12 @@ model Tournament {
   status       String   @default("created") // "created", "active", "finished"
   powerLevel   String   // "casual", "optimized", "cedh"
   
-  // Ubicación física
+  // UbicaciÃ³n fÃ­sica
   locationName String
   latitude     Float
   longitude    Float
   
-  entryFee     Int      // En céntimos (ej: 500 = €5.00)
+  entryFee     Int      // En cÃ©ntimos (ej: 500 = â‚¬5.00)
   maxPlayers   Int
   startDate    DateTime
   createdAt    DateTime @default(now())
@@ -147,8 +137,8 @@ model Tournament {
   
   storeId      String   // ID de la tienda organizadora
   
-  // Nuevos campos logísticos y configuraciones avanzadas
-  roomCode         String?  @unique // Código de sala, ej: "CMD-742"
+  // Nuevos campos logÃ­sticos y configuraciones avanzadas
+  roomCode         String?  @unique // CÃ³digo de sala, ej: "CMD-742"
   bannerUrl        String?
   isPhysical       Boolean  @default(true)
   address          String?
@@ -193,7 +183,7 @@ model TournamentParticipant {
   commanderScryfallId String?
   decklistValidated Boolean  @default(false)
   
-  // Estadísticas del jugador en este torneo específico
+  // EstadÃ­sticas del jugador en este torneo especÃ­fico
   matchPoints     Int        @default(0)
   omwPercentage   Float      @default(0.0)
   gwPercentage    Float      @default(0.0)

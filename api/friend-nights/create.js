@@ -54,14 +54,35 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'startsAt must be a valid ISO date string' });
     }
 
+    const creator = await prisma.user.findUnique({
+      where: { id: createdByUserId },
+      select: { id: true },
+    });
+
+    if (!creator) {
+      return res.status(404).json({
+        error: 'creator_not_found',
+        message: 'createdByUserId does not match a registered user. Please log in before creating a Friend Night event.',
+      });
+    }
+
     const eventId = await findAvailableFriendNightId(5);
 
-    const uniqueInviteUserIds = [...new Set(
+    const requestedInviteUserIds = [...new Set(
       inviteFriendUserIds
         .filter((userId) => typeof userId === 'string')
         .map((userId) => userId.trim())
         .filter((userId) => userId && userId !== createdByUserId)
     )];
+
+    let uniqueInviteUserIds = [];
+    if (requestedInviteUserIds.length > 0) {
+      const validInviteUsers = await prisma.user.findMany({
+        where: { id: { in: requestedInviteUserIds } },
+        select: { id: true },
+      });
+      uniqueInviteUserIds = validInviteUsers.map((user) => user.id);
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       const event = await tx.friendNightEvent.create({

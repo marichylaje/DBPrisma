@@ -90,6 +90,12 @@ model SharedDeck {
 model User {
   decks        UserDeck[]
   collections  UserCollection[]
+  friendRequestsSent     Friendship[] @relation("FriendRequester")
+  friendRequestsReceived Friendship[] @relation("FriendAddressee")
+  friendNightEventsCreated   FriendNightEvent[]
+  friendNightPlayerEntries   FriendNightPlayer[]
+  friendNightInvitesReceived FriendNightInvite[] @relation("FriendNightInvited")
+  friendNightInvitesSent     FriendNightInvite[] @relation("FriendNightInviter")
   id           String     @id // Proveniente del servicio de Autenticación (Firebase/Supabase) o generado por nosotros
   nickname     String
   email        String?    @unique
@@ -116,6 +122,65 @@ model User {
   // Relaciones para reportes de árbitros (Jueces)
   penalizedReports JudgeReport[] @relation("PlayerPenalized")
   judgedReports    JudgeReport[] @relation("JudgeSanc")
+}
+
+model Friendship {
+  id          String   @id @default(cuid())
+  requesterId String
+  requester   User     @relation("FriendRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addresseeId String
+  addressee   User     @relation("FriendAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+  status      String   @default("pending") // "pending" | "accepted" | "declined"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([requesterId, addresseeId])
+  @@index([addresseeId])
+  @@index([requesterId])
+}
+
+model FriendNightEvent {
+  id              String @id
+  name            String
+  startsAt        DateTime
+  createdByUserId String
+  createdBy       User   @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  players FriendNightPlayer[]
+  invites FriendNightInvite[]
+
+  @@index([createdByUserId])
+}
+
+model FriendNightPlayer {
+  id      String          @id @default(cuid())
+  eventId String
+  event   FriendNightEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  decks   Json            @default("[]")
+  rule0   String?         @db.Text
+  joinedAt DateTime       @default(now())
+
+  @@unique([eventId, userId])
+  @@index([userId])
+}
+
+model FriendNightInvite {
+  id              String          @id @default(cuid())
+  eventId         String
+  event           FriendNightEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  invitedUserId   String
+  invitedUser     User            @relation("FriendNightInvited", fields: [invitedUserId], references: [id], onDelete: Cascade)
+  invitedByUserId String
+  invitedBy       User            @relation("FriendNightInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  status          String          @default("pending") // "pending" | "accepted" | "declined"
+  createdAt       DateTime        @default(now())
+
+  @@unique([eventId, invitedUserId])
+  @@index([invitedUserId])
 }
 
 model Tournament {

@@ -16,10 +16,15 @@ model UserEntitlement {
   subPlatform  String?
   subProductId String?
   subExpiry    DateTime?
+  subStatus    String?   // "active" | "grace_period" | "on_hold" | "canceled" | "expired" | "revoked" | "paused"
 
-  // Android pendiente
+  // iOS: identificador estable de la suscripción, usado por App Store Server Notifications
+  // para reconciliar renovaciones/cancelaciones sin depender del recibo original.
+  appleOriginalTransactionId String? @unique
+
+  // Android pendiente / anti-replay: un mismo token no puede pertenecer a dos usuarios distintos.
   pendingAndroid       Boolean   @default(false)
-  androidPurchaseToken String?
+  androidPurchaseToken String?   @unique
   lastVerifyAt         DateTime?
   verifyError          String?
 
@@ -30,6 +35,19 @@ model UserEntitlement {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Idempotencia de webhooks: evita procesar dos veces la misma notificación
+// de Apple (notificationUUID) o Google (Pub/Sub messageId) ante reintentos.
+model ProcessedIapNotification {
+  id             String   @id @default(cuid())
+  source         String   // "apple" | "google"
+  notificationId String   @unique
+  notificationType String?
+  userKey        String?
+  createdAt      DateTime @default(now())
+
+  @@index([source, createdAt])
 }
 
 model UserDeck {

@@ -1,15 +1,14 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { verifyAndroidSub } = require('../../lib/iap-google');
+const { checkSecret } = require('../../lib/auth');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
-  // Protegido por el mismo secret de app
-  if (process.env.APP_BACKEND_SECRET && req.headers['x-app-secret'] !== process.env.APP_BACKEND_SECRET) {
-    return res.status(401).json({ error: 'unauthorized' });
-  }
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end();
+  // Protegido por el mismo secret de app
+  if (!checkSecret(req, res)) return;
 
   try {
     const pend = await prisma.userEntitlement.findMany({

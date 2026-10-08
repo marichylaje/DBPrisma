@@ -8,27 +8,70 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// ----------------------------------------------------
+// TABLAS PROPIAS / COMPARTIDAS DE TRACKING Y ANALÍTICA
+// ----------------------------------------------------
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  userKey    String
+  sessionId  String
+  eventName  String
+  screenName String?
+  flowName   String?
+  platform   String
+  appVersion String
+  language   String?
+  region     String?
+  role       String?
+  isPaidUser Boolean?
+  occurredAt DateTime
+  properties Json?
+  createdAt  DateTime @default(now())
+
+  @@index([occurredAt])
+  @@index([eventName, occurredAt])
+  @@index([userKey, occurredAt])
+  @@index([sessionId, occurredAt])
+  @@index([screenName, occurredAt])
+}
+
+model IapTrackingEvent {
+  id              String   @id @default(cuid())
+  source          String
+  platform        String
+  eventType       String
+  readableMessage String
+  userId          String?
+  productId       String?
+  occurredAt      DateTime
+  createdAt       DateTime @default(now())
+
+  @@index([occurredAt])
+  @@index([eventType, occurredAt])
+  @@index([userId, occurredAt])
+}
+
+// ----------------------------------------------------
+// MODELOS DEL BACKEND DBPRISMA (Para no eliminarlos)
+// ----------------------------------------------------
+
 model UserEntitlement {
   userKey String @id
 
-  // Suscripción
   subActive    Boolean   @default(false)
   subPlatform  String?
   subProductId String?
   subExpiry    DateTime?
-  subStatus    String?   // "active" | "grace_period" | "on_hold" | "canceled" | "expired" | "revoked" | "paused"
+  subStatus    String?
 
-  // iOS: identificador estable de la suscripción, usado por App Store Server Notifications
-  // para reconciliar renovaciones/cancelaciones sin depender del recibo original.
   appleOriginalTransactionId String? @unique
 
-  // Android pendiente / anti-replay: un mismo token no puede pertenecer a dos usuarios distintos.
   pendingAndroid       Boolean   @default(false)
   androidPurchaseToken String?   @unique
   lastVerifyAt         DateTime?
   verifyError          String?
 
-  // Trial
   trialGranted Boolean   @default(false)
   trialStart   DateTime?
   trialExpiry  DateTime?
@@ -37,15 +80,13 @@ model UserEntitlement {
   updatedAt DateTime @updatedAt
 }
 
-// Idempotencia de webhooks: evita procesar dos veces la misma notificación
-// de Apple (notificationUUID) o Google (Pub/Sub messageId) ante reintentos.
 model ProcessedIapNotification {
-  id             String   @id @default(cuid())
-  source         String   // "apple" | "google"
-  notificationId String   @unique
+  id               String   @id @default(cuid())
+  source           String
+  notificationId   String   @unique
   notificationType String?
-  userKey        String?
-  createdAt      DateTime @default(now())
+  userKey          String?
+  createdAt        DateTime @default(now())
 
   @@index([source, createdAt])
 }
@@ -81,24 +122,22 @@ model DeckDownload {
 }
 
 model SharedDeck {
-  id              String  @id @default(cuid())
+  id              String   @id @default(cuid())
   userKey         String?
   deckName        String
-  deckDescription String? @db.Text
+  deckDescription String?  @db.Text
 
   commanderName String
   commanderId   String?
   partnerName   String?
   partnerId     String?
 
-  // List: [{ name: "...", count: 1 }]
   cards     Json
   sideboard Json @default("[]")
 
   createdAt DateTime @default(now())
 
-  // Extensibility for tournaments
-  sharedType   String  @default("QR") // "QR", "TOURNAMENT", etc.
+  sharedType   String  @default("QR")
   tournamentId String?
 
   @@index([createdAt])
@@ -106,38 +145,34 @@ model SharedDeck {
 }
 
 model User {
-  decks        UserDeck[]
-  collections  UserCollection[]
-  friendRequestsSent     Friendship[] @relation("FriendRequester")
-  friendRequestsReceived Friendship[] @relation("FriendAddressee")
-  friendNightEventsCreated   FriendNightEvent[]
-  friendNightPlayerEntries   FriendNightPlayer[]
-  friendNightInvitesReceived FriendNightInvite[] @relation("FriendNightInvited")
-  friendNightInvitesSent     FriendNightInvite[] @relation("FriendNightInviter")
-  id           String     @id // Proveniente del servicio de Autenticación (Firebase/Supabase) o generado por nosotros
-  nickname     String
-  email        String?    @unique
-  passwordHash String?
-  role         String // "player" o "store"
+  decks                    UserDeck[]
+  collections              UserCollection[]
+  friendRequestsSent       Friendship[]            @relation("FriendRequester")
+  friendRequestsReceived   Friendship[]            @relation("FriendAddressee")
+  friendNightEventsCreated FriendNightEvent[]
+  friendNightPlayerEntries FriendNightPlayer[]
+  friendNightInvitesReceived FriendNightInvite[]   @relation("FriendNightInvited")
+  friendNightInvitesSent   FriendNightInvite[]     @relation("FriendNightInviter")
+  id                       String                  @id
+  nickname                 String
+  email                    String?                 @unique
+  passwordHash             String?
+  role                     String
 
-  // Gamificación (Jugador)
   xp    Int @default(0)
   level Int @default(1)
 
-  // Perfil de Tienda
   storeName    String?
   storeAddress String?
 
-  // Estadísticas competitivas
-  statsJson  Json? // Snapshot persistido de métricas competitivas del jugador
-  badgesJson Json? // Insignias desbloqueadas por méritos medibles en torneos
+  statsJson  Json?
+  badgesJson Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   tournamentParticipants TournamentParticipant[]
 
-  // Relaciones para reportes de árbitros (Jueces)
   penalizedReports JudgeReport[] @relation("PlayerPenalized")
   judgedReports    JudgeReport[] @relation("JudgeSanc")
 }
@@ -148,7 +183,7 @@ model Friendship {
   requester   User     @relation("FriendRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   addresseeId String
   addressee   User     @relation("FriendAddressee", fields: [addresseeId], references: [id], onDelete: Cascade)
-  status      String   @default("pending") // "pending" | "accepted" | "declined"
+  status      String   @default("pending")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -158,11 +193,11 @@ model Friendship {
 }
 
 model FriendNightEvent {
-  id              String @id
+  id              String   @id
   name            String
   startsAt        DateTime
   createdByUserId String
-  createdBy       User   @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
+  createdBy       User     @relation(fields: [createdByUserId], references: [id], onDelete: Cascade)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -173,57 +208,55 @@ model FriendNightEvent {
 }
 
 model FriendNightPlayer {
-  id      String          @id @default(cuid())
-  eventId String
-  event   FriendNightEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  userId  String
-  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  decks   Json            @default("[]")
-  rule0   String?         @db.Text
-  joinedAt DateTime       @default(now())
+  id       String           @id @default(cuid())
+  eventId  String
+  event    FriendNightEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  decks    Json             @default("[]")
+  rule0    String?          @db.Text
+  joinedAt DateTime         @default(now())
 
   @@unique([eventId, userId])
   @@index([userId])
 }
 
 model FriendNightInvite {
-  id              String          @id @default(cuid())
+  id              String           @id @default(cuid())
   eventId         String
   event           FriendNightEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
   invitedUserId   String
-  invitedUser     User            @relation("FriendNightInvited", fields: [invitedUserId], references: [id], onDelete: Cascade)
+  invitedUser     User             @relation("FriendNightInvited", fields: [invitedUserId], references: [id], onDelete: Cascade)
   invitedByUserId String
-  invitedBy       User            @relation("FriendNightInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
-  status          String          @default("pending") // "pending" | "accepted" | "declined"
-  createdAt       DateTime        @default(now())
+  invitedBy       User             @relation("FriendNightInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+  status          String           @default("pending")
+  createdAt       DateTime         @default(now())
 
   @@unique([eventId, invitedUserId])
   @@index([invitedUserId])
 }
 
 model Tournament {
-  id          String  @id @default(cuid())
+  id          String   @id @default(cuid())
   title       String
-  description String? @db.Text
-  format      String // "commander_multiplayer", "duel_1vs1", "two_headed_giant", "draft"
-  status      String  @default("created") // "created", "active", "finished"
-  powerLevel  String // "casual", "optimized", "cedh"
+  description String?  @db.Text
+  format      String
+  status      String   @default("created")
+  powerLevel  String
 
-  // Ubicación física
   locationName String
   latitude     Float
   longitude    Float
 
-  entryFee   Int // En céntimos (ej: 500 = €5.00)
+  entryFee   Int
   maxPlayers Int
   startDate  DateTime
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  storeId String // ID de la tienda organizadora
+  storeId String
 
-  // Nuevos campos logísticos y configuraciones avanzadas
-  roomCode         String? @unique // Código de sala, ej: "CMD-742"
+  roomCode         String? @unique
   bannerUrl        String?
   isPhysical       Boolean @default(true)
   address          String?
@@ -231,15 +264,13 @@ model Tournament {
   allowProxies     Boolean @default(true)
   proxyLimit       Int     @default(10)
   requireDecklist  Boolean @default(true)
-  rulesEnforcement String  @default("Regular") // "Casual" | "Regular" | "Competitive"
+  rulesEnforcement String  @default("Regular")
 
-  // Rondas y estructura del torneo
-  roundType    String @default("Swiss") // "Swiss", "Swiss + Top 4 Cut", "Single Elimination"
+  roundType    String @default("Swiss")
   currentRound Int    @default(0)
-  waitlist     Json? // Array de userIds: ["player-x", "player-y"]
-  admins       Json? // Array de userIds de co-administradores: ["admin-1", "admin-2"]
+  waitlist     Json?
+  admins       Json?
 
-  // Premios
   prizePool   String?
   prizeDetail String? @db.Text
 
@@ -256,19 +287,17 @@ model TournamentParticipant {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  deckSnapshot    Json? // Copia profunda del mazo activo al inscribirse
-  roundsReport    String[] // Lista de resultados por ronda (ej: ["2-1", "2-0"])
+  deckSnapshot    Json?
+  roundsReport    String[]
   openToTrade     Boolean  @default(false)
-  pointsProcessed Boolean  @default(false) // Escudo de doble pago
+  pointsProcessed Boolean  @default(false)
 
-  // Nuevos campos financieros y de decklists
-  paymentStatus       String  @default("Pending") // "Pending" | "Paid" | "Refunded"
-  paymentMethod       String? // "Stripe" | "Cash" | "Points"
-  decklistUrl         String? // Moxfield URL, etc.
+  paymentStatus       String  @default("Pending")
+  paymentMethod       String?
+  decklistUrl         String?
   commanderScryfallId String?
   decklistValidated   Boolean @default(false)
 
-  // Estadísticas del jugador en este torneo específico
   matchPoints   Int     @default(0)
   omwPercentage Float   @default(0.0)
   gwPercentage  Float   @default(0.0)
@@ -291,7 +320,7 @@ model JudgeReport {
   playerId String
   player   User   @relation("PlayerPenalized", fields: [playerId], references: [id], onDelete: Cascade)
 
-  infractionType String // "Warning" | "Game_Loss" | "Match_Loss" | "Disqualification"
+  infractionType String
   reason         String @db.Text
 
   judgeId String
@@ -309,13 +338,10 @@ model TournamentMatch {
   round       Int
   tableNumber Int
 
-  // Jugadores en esta mesa. Formato: [{ "userId": "...", "name": "..." }, ...]
   players Json
-
-  // Resultados reportados. Formato: { "score": "2-1-0", "winnerId": "...", "playerScores": [{ "userId": "...", "wins": 2 }] }
   results Json?
 
-  status     String  @default("pending") // "pending" | "reported" | "verified"
+  status      String  @default("pending")
   reportedBy String?
 
   createdAt DateTime @default(now())
@@ -328,7 +354,7 @@ model UserCollection {
   userKey   String   @id
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  cards     Json // Arreglo de strings: ["Black Lotus|vma|4", "Aether Vial", ...]
+  cards     Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -336,31 +362,7 @@ model UserCollection {
 }
 
 model CardPriceHistory {
-  cardKey   String   @id // Clave identificadora de la carta (ej. "Black Lotus|vma|4" o "Aether Vial")
-  history   Json // Array: [ { "timestamp": 1782347289000, "priceUsd": 4.09, "priceEur": 3.88 } ]
+  cardKey   String   @id
+  history   Json
   updatedAt DateTime @updatedAt
-}
-
-model AnalyticsEvent {
-  id         String   @id @default(cuid())
-  userKey    String
-  sessionId  String
-  eventName  String
-  screenName String?
-  flowName   String?
-  platform   String
-  appVersion String
-  language   String?
-  region     String?
-  role       String?
-  isPaidUser Boolean?
-  occurredAt DateTime
-  properties Json?
-  createdAt  DateTime @default(now())
-
-  @@index([occurredAt])
-  @@index([eventName, occurredAt])
-  @@index([userKey, occurredAt])
-  @@index([sessionId, occurredAt])
-  @@index([screenName, occurredAt])
 }

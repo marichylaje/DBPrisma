@@ -96,7 +96,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, deck: upserted });
   } catch (e) {
-    console.error('âŒ /api/decks/save', e);
+    console.error('❌ /api/decks/save', e);
     res.status(500).json({ error: 'failed' });
   }
 };

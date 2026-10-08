@@ -33,7 +33,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ deck: responseDeck });
   } catch (e) {
-    console.error('âŒ /api/decks/get', e);
+    console.error('❌ /api/decks/get', e);
     res.status(500).json({ error: 'failed' });
   }
 };

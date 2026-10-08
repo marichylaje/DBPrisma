@@ -1,6 +1,6 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireUser } = require('../../lib/auth');
 
 function generateFriendNightId() {
   let token = '';
@@ -32,7 +32,9 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method !== 'POST') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
+
+    const auth = requireUser(req, res);
+    if (!auth) return;
 
     const {
       name,
@@ -43,6 +45,10 @@ module.exports = async (req, res) => {
 
     if (!name || !startsAt || !createdByUserId) {
       return res.status(400).json({ error: 'name, startsAt and createdByUserId are required' });
+    }
+
+    if (createdByUserId !== auth.userId) {
+      return res.status(403).json({ error: 'forbidden' });
     }
 
     if (!Array.isArray(inviteFriendUserIds)) {

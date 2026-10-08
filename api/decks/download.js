@@ -49,7 +49,7 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ success: true, count: Number(saved.count ?? 0) });
   } catch (e) {
-    console.error('âŒ /api/decks/download', e);
+    console.error('❌ /api/decks/download', e);
     res.status(500).json({ error: 'failed' });
   }
 };

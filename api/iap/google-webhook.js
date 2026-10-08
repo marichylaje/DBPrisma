@@ -10,6 +10,8 @@ const { prisma } = require('../../lib/prisma');
 const { getSubscriptionStateByToken, mapGoogleStateToStatus } = require('../../lib/iap-google');
 const { verifyPubSubPushToken } = require('../../lib/google-pubsub-auth');
 const { logIapEvent } = require('../../lib/iapLogger');
+const { translateGoogleEvent } = require('../../lib/iap/eventTranslator');
+const { sendToEventTracking } = require('../../lib/iap/eventTrackingService');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -51,14 +53,16 @@ module.exports = async (req, res) => {
     if (payload.testNotification) {
       notificationType = 'TEST';
     } else if (payload.subscriptionNotification) {
-      const { purchaseToken, notificationType: nt } = payload.subscriptionNotification;
+      const { purchaseToken, notificationType: nt, subscriptionId } = payload.subscriptionNotification;
       notificationType = `SUBSCRIPTION_${nt}`;
 
       const ent = await prisma.userEntitlement.findUnique({ where: { androidPurchaseToken: purchaseToken } });
       if (ent) {
         userKey = ent.userKey;
+        let eventProductId = subscriptionId || ent.subProductId;
         try {
           const r = await getSubscriptionStateByToken(purchaseToken);
+          eventProductId = r.productId || eventProductId;
           await prisma.userEntitlement.update({
             where: { userKey: ent.userKey },
             data: {
@@ -78,6 +82,15 @@ module.exports = async (req, res) => {
             data: { lastVerifyAt: new Date(), verifyError: String(verifyErr && verifyErr.message || verifyErr) },
           });
         }
+
+        const translated = translateGoogleEvent(nt, eventProductId);
+        await sendToEventTracking({
+          platform: 'ANDROID',
+          eventType: translated.eventType,
+          readableMessage: translated.readableMessage,
+          userId: userKey,
+          productId: eventProductId,
+        });
       } else {
         logIapEvent({ level: 'warn', source: 'google', event: 'webhook_unlinked_token', notificationType: nt });
       }

@@ -1,5 +1,5 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
-// Muestra SOLO el estado del trial (no mezcla con suscripciÃ³n)
+// Muestra SOLO el estado del trial (no mezcla con suscripción)
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 

@@ -1,18 +1,25 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireUser } = require('../../lib/auth');
+const { getTournamentManageAccess } = require('../../lib/tournamentAuth');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
+
+    const auth = requireUser(req, res);
+    if (!auth) return;
 
     const { matchId, winnerId, score = '2-0', reportedBy } = req.body || {};
 
     if (!matchId || !winnerId || !reportedBy) {
       return res.status(400).json({ error: 'matchId, winnerId, and reportedBy are required' });
+    }
+
+    if (reportedBy !== auth.userId) {
+      return res.status(403).json({ error: 'forbidden' });
     }
 
     // 1. Fetch match details
@@ -28,6 +35,11 @@ module.exports = async (req, res) => {
     }
 
     const playersList = Array.isArray(match.players) ? match.players : [];
+    const access = await getTournamentManageAccess(prisma, match.tournamentId, auth.userId);
+    const isParticipant = playersList.some((p) => p.userId === auth.userId);
+    if (!access.ok && !isParticipant) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
 
     // Parse scores: e.g. "2-1" or "2-0"
     const scoreParts = score.split('-').map(Number);
@@ -125,7 +137,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, match: updatedMatch });
   } catch (e) {
-    console.error('âŒ /api/matches/report error:', e);
+    console.error('❌ /api/matches/report error:', e);
     res.status(500).json({ error: 'failed', details: e.message });
   }
 };

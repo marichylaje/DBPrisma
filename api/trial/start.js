@@ -1,5 +1,5 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
-// Inicia un trial de N dÃ­as (default 5). Si ya fue concedido, devuelve el existente.
+// Inicia un trial de N días (default 5). Si ya fue concedido, devuelve el existente.
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 
@@ -21,7 +21,7 @@ module.exports = async (req, res) => {
     });
   }
 
-  // DuraciÃ³n de trial fijada en servidor; el cliente NO puede modificarla (evita abuso de trial infinito).
+  // Duración de trial fijada en servidor; el cliente NO puede modificarla (evita abuso de trial infinito).
   const nDays = Number(process.env.TRIAL_DAYS) > 0 ? Number(process.env.TRIAL_DAYS) : 5;
   const now = Date.now();
   const expiry = new Date(now + nDays * 24 * 60 * 60 * 1000);

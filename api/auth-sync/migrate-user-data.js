@@ -1,6 +1,6 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireUser } = require('../../lib/auth');
 
 /**
  * POST /api/auth-sync/migrate-user-data
@@ -12,12 +12,18 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method !== 'POST') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
+
+    const auth = requireUser(req, res);
+    if (!auth) return;
 
     const { userId, userKey } = req.body || {};
 
     if (!userId || !userKey) {
       return res.status(400).json({ error: 'userId and userKey are required' });
+    }
+
+    if (userId !== auth.userId) {
+      return res.status(403).json({ error: 'forbidden' });
     }
 
     // Verify user exists

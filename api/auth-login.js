@@ -1,6 +1,6 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../lib/prisma');
-const { checkSecret } = require('../lib/auth');
+const { checkSecret, issueUserToken } = require('../lib/auth');
 const crypto = require('crypto');
 
 function verifyPassword(password, stored) {
@@ -54,7 +54,8 @@ module.exports = async (req, res) => {
 
     // Return user without passwordHash
     const { passwordHash: _, ...safeUser } = user;
-    res.status(200).json({ ok: true, userId: user.id, user: safeUser });
+    const token = issueUserToken(safeUser);
+    res.status(200).json({ ok: true, userId: user.id, user: safeUser, token });
   } catch (e) {
     console.error('❌ /api/auth-login error:', e);
     res.status(500).json({ error: 'failed', details: e.message });

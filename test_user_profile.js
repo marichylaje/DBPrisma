@@ -8,8 +8,7 @@ async function main() {
 
   try {
     const testUserId = 'dkb_test_user_key_12345';
-    const testName = 'Alex';
-    const testSurname = 'Guerrero';
+    const testNickname = 'AlexGuerrero';
     const testEmail = 'alex.guerrero@planeswalker.com';
 
     console.log(`👤 Upserteando usuario de prueba: ${testUserId}`);
@@ -18,16 +17,14 @@ async function main() {
       where: { id: testUserId },
       create: {
         id: testUserId,
-        name: testName,
-        surname: testSurname,
+        nickname: testNickname,
         email: testEmail,
         role: 'player',
         xp: 0,
         level: 1,
       },
       update: {
-        name: testName,
-        surname: testSurname,
+        nickname: testNickname,
         email: testEmail,
       },
     });
@@ -41,7 +38,7 @@ async function main() {
 
     console.log('✅ Usuario encontrado en DB:', foundUser);
 
-    if (foundUser && foundUser.name === testName && foundUser.surname === testSurname) {
+    if (foundUser && foundUser.nickname === testNickname && foundUser.email === testEmail) {
       console.log('🎉 ¡Prueba de integración exitosa! Base de datos sincronizando correctamente.');
     } else {
       console.error('❌ Error de validación: Los datos del usuario no coinciden.');

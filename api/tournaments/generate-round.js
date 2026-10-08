@@ -1,18 +1,26 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireUser } = require('../../lib/auth');
+const { getTournamentManageAccess } = require('../../lib/tournamentAuth');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
+
+    const auth = requireUser(req, res, { roles: ['store'] });
+    if (!auth) return;
 
     const { tournamentId } = req.body || {};
 
     if (!tournamentId) {
       return res.status(400).json({ error: 'tournamentId is required' });
+    }
+
+    const access = await getTournamentManageAccess(prisma, tournamentId, auth.userId);
+    if (!access.ok) {
+      return res.status(access.reason === 'not_found' ? 404 : 403).json({ error: access.reason === 'not_found' ? 'Tournament not found' : 'forbidden' });
     }
 
     // 1. Fetch tournament and participants
@@ -285,7 +293,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, round: nextRound, matches: createdMatches });
   } catch (e) {
-    console.error('âŒ /api/tournaments/generate-round error:', e);
+    console.error('❌ /api/tournaments/generate-round error:', e);
     res.status(500).json({ error: 'failed', details: e.message });
   }
 };

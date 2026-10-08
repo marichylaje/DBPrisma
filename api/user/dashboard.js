@@ -1,6 +1,6 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireUser } = require('../../lib/auth');
 const {
   refreshUserGamification,
   summarizeRounds,
@@ -11,7 +11,9 @@ module.exports = async (req, res) => {
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'GET') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
+
+    const auth = requireUser(req, res);
+    if (!auth) return;
 
     const { userId } = req.query || {};
 
@@ -19,7 +21,11 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'userId is required' });
     }
 
-    // 1. Refrescar snapshot persistido y cargar el usuario con su histÃ³rico.
+    if (userId !== auth.userId) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
+
+    // 1. Refrescar snapshot persistido y cargar el usuario con su histórico.
     const refreshed = await refreshUserGamification(prisma, userId);
     const user = refreshed && refreshed.user;
 
@@ -132,7 +138,7 @@ module.exports = async (req, res) => {
       badges: Array.isArray(user.badgesJson) ? user.badgesJson : [],
     });
   } catch (e) {
-    console.error('âŒ /api/user/dashboard error:', e);
+    console.error('❌ /api/user/dashboard error:', e);
     res.status(500).json({ error: 'failed', details: e.message });
   }
 };

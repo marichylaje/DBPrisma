@@ -24,7 +24,7 @@ module.exports = async (req, res) => {
       cards: collection ? collection.cards : [],
     });
   } catch (e) {
-    console.error('âŒ /api/collection/get', e);
+    console.error('❌ /api/collection/get', e);
     res.status(500).json({ error: 'failed', details: e.message });
   }
 };

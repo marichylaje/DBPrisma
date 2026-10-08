@@ -9,6 +9,8 @@ const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { verifyAndDecodeNotification } = require('../../lib/iap-apple-server');
 const { logIapEvent } = require('../../lib/iapLogger');
+const { translateAppleEvent } = require('../../lib/iap/eventTranslator');
+const { sendToEventTracking } = require('../../lib/iap/eventTrackingService');
 
 function mapToEntitlementUpdate(notificationType, subtype, transaction) {
   const expiresDate = transaction?.expiresDate || null;
@@ -92,6 +94,16 @@ module.exports = async (req, res) => {
         await prisma.userEntitlement.update({
           where: { userKey: ent.userKey },
           data: { ...update, lastVerifyAt: new Date(), verifyError: null },
+        });
+
+        const eventProductId = transaction?.productId || ent.subProductId;
+        const translated = translateAppleEvent(notificationType, eventProductId);
+        await sendToEventTracking({
+          platform: 'IOS',
+          eventType: translated.eventType,
+          readableMessage: translated.readableMessage,
+          userId: userKey,
+          productId: eventProductId,
         });
       } else {
         logIapEvent({ level: 'warn', source: 'apple', event: 'webhook_unlinked_transaction', originalTransactionId, notificationType });

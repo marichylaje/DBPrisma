@@ -39,7 +39,11 @@ module.exports = async (req, res) => {
     if (body.platform === 'android') {
       const allowPending = process.env.ALLOW_PENDING_ANDROID_PREMIUM === 'true';
       const disableVerify = process.env.DISABLE_ANDROID_VERIFY === 'true';
-      const pendingDays = Number(process.env.PENDING_DEFAULT_DAYS || 7);
+      // Tope de seguridad: aunque PENDING_DEFAULT_DAYS esté mal configurado (o sea muy alto),
+      // nunca se concede más de MAX_PENDING_DAYS de acceso premium sin verificación real.
+      const MAX_PENDING_DAYS = 30;
+      const pendingDays = Math.min(Math.max(Number(process.env.PENDING_DEFAULT_DAYS) || 7, 1), MAX_PENDING_DAYS);
+      const isProduction = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV === 'production';
 
       // Anti-replay: un mismo purchaseToken no puede quedar vinculado a dos cuentas.
       if (body.purchaseToken) {
@@ -51,6 +55,21 @@ module.exports = async (req, res) => {
       }
 
       if (disableVerify) {
+        // ⚠️ Bypass temporal mientras no haya acceso a la API de verificación de Google Play:
+        // esta rama NO valida la compra real contra Google, confía en lo que envía el cliente.
+        // Queda auditado en cada llamada (incluida la bandera `isProduction`) para poder
+        // detectar si esta flag peligrosa quedó encendida por error en producción.
+        logIapEvent({
+          level: 'warn',
+          source: 'android',
+          event: 'verify_bypassed_unverified_grant',
+          userKey,
+          productId: body.productId,
+          pendingDays,
+          allowPending,
+          isProduction,
+        });
+
         const expires = new Date(Date.now() + pendingDays * 24*60*60*1000);
         await prisma.userEntitlement.upsert({
           where: { userKey },

@@ -1,5 +1,5 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
-// Estado unificado de acceso premium (suscripciÃ³n vÃ¡lida o trial activo)
+// Estado unificado de acceso premium (suscripción válida o trial activo)
 const { prisma } = require('../lib/prisma');
 const { checkSecret } = require('../lib/auth');
 

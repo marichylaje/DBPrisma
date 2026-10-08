@@ -1,13 +1,16 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireUser } = require('../../lib/auth');
+const { getTournamentManageAccess } = require('../../lib/tournamentAuth');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'PUT') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
+
+    const auth = requireUser(req, res, { roles: ['store'] });
+    if (!auth) return;
 
     const {
       tournamentId,
@@ -19,6 +22,11 @@ module.exports = async (req, res) => {
 
     if (!tournamentId || !userId) {
       return res.status(400).json({ error: 'tournamentId and userId are required' });
+    }
+
+    const access = await getTournamentManageAccess(prisma, tournamentId, auth.userId);
+    if (!access.ok) {
+      return res.status(access.reason === 'not_found' ? 404 : 403).json({ error: access.reason === 'not_found' ? 'Tournament not found' : 'forbidden' });
     }
 
     // 1. Fetch participant record
@@ -48,7 +56,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, participant: updated });
   } catch (e) {
-    console.error('âŒ /api/tournaments/check-in error:', e);
+    console.error('❌ /api/tournaments/check-in error:', e);
     res.status(500).json({ error: 'failed', details: e.message });
   }
 };

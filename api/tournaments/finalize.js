@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireUser } = require('../../lib/auth');
+const { getTournamentManageAccess } = require('../../lib/tournamentAuth');
 const {
   refreshUserGamification,
   summarizeRounds,
@@ -11,12 +12,19 @@ module.exports = async (req, res) => {
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
+
+    const auth = requireUser(req, res, { roles: ['store'] });
+    if (!auth) return;
 
     const { tournamentId } = req.body || {};
 
     if (!tournamentId) {
       return res.status(400).json({ error: 'tournamentId is required' });
+    }
+
+    const access = await getTournamentManageAccess(prisma, tournamentId, auth.userId);
+    if (!access.ok) {
+      return res.status(access.reason === 'not_found' ? 404 : 403).json({ error: access.reason === 'not_found' ? 'Tournament not found' : 'forbidden' });
     }
 
     // 1. Fetch tournament details with participants and check existence
@@ -72,7 +80,7 @@ module.exports = async (req, res) => {
       // B. Process each participant's XP points
       for (const p of tournament.participants) {
         if (p.pointsProcessed) {
-          console.log(`âš ï¸ Participant ${p.id} already processed. Skipping.`);
+          console.log(`⚠️ Participant ${p.id} already processed. Skipping.`);
           continue;
         }
 
@@ -148,7 +156,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, result });
   } catch (e) {
-    console.error('âŒ /api/tournaments/finalize error:', e);
+    console.error('❌ /api/tournaments/finalize error:', e);
     res.status(500).json({ error: 'Failed to finalize tournament and process XP' });
   }
 };

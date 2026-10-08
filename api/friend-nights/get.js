@@ -1,6 +1,6 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireUser } = require('../../lib/auth');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -8,7 +8,9 @@ module.exports = async (req, res) => {
 
   try {
     if (req.method !== 'GET') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
+
+    const auth = requireUser(req, res);
+    if (!auth) return;
 
     const { eventId, userId } = req.query || {};
 
@@ -18,6 +20,10 @@ module.exports = async (req, res) => {
 
     const normalizedEventId = eventId.trim();
     const normalizedUserId = userId.trim();
+
+    if (normalizedUserId !== auth.userId) {
+      return res.status(403).json({ error: 'forbidden' });
+    }
 
     const participant = await prisma.friendNightPlayer.findUnique({
       where: {

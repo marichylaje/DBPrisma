@@ -2,6 +2,7 @@
 require('dotenv').config();
 
 const { prisma } = require('./lib/prisma');
+const { issueUserToken } = require('./lib/auth');
 
 // Importar los controladores de la API directamente
 const createTournamentHandler = require('./api/tournaments/create');
@@ -14,14 +15,18 @@ const createInfractionHandler = require('./api/reports/create');
 const finalizeTournamentHandler = require('./api/tournaments/finalize');
 const userDashboardHandler = require('./api/user/dashboard');
 
-// Helper para mockear peticiones/respuestas HTTP
-async function callAPI(handler, method, params = {}) {
+// Helper para mockear peticiones/respuestas HTTP. `actorToken` es el JWT del usuario que
+// realiza la llamada (emitido vía issueUserToken), requerido por los endpoints que ahora
+// exigen Authorization: Bearer <jwt> en vez del secreto compartido x-app-secret.
+async function callAPI(handler, method, params = {}, actorToken = null) {
   const req = {
     method,
-    headers: {
-      'x-app-secret': process.env.APP_BACKEND_SECRET || 'pon_una_clave_larga_y_unica_mariarri30_db_prisma',
-    },
+    headers: {},
   };
+
+  if (actorToken) {
+    req.headers['authorization'] = `Bearer ${actorToken}`;
+  }
 
   if (method === 'GET') {
     req.query = params;
@@ -30,8 +35,15 @@ async function callAPI(handler, method, params = {}) {
   }
 
   return new Promise((resolve, reject) => {
+    const headers = {};
     const res = {
       statusCode: 200,
+      setHeader(name, value) {
+        headers[name] = value;
+      },
+      getHeader(name) {
+        return headers[name];
+      },
       status(code) {
         this.statusCode = code;
         return this;
@@ -119,24 +131,23 @@ async function main() {
     const storeUser = await prisma.user.create({
       data: {
         id: storeId,
-        name: 'Magic Paradise Málaga',
-        surname: 'Store Admin',
+        nickname: 'Magic Paradise Málaga',
         email: 'malaga@magicparadise.com',
         role: 'store',
         storeName: 'Magic Paradise Málaga',
         storeAddress: 'Calle Larios 15, Málaga',
       },
     });
+    const storeToken = issueUserToken(storeUser);
     console.log(`🏠 Tienda creada: "${storeUser.storeName}" [ID: ${storeUser.id}]`);
 
     const players = [];
+    const playerTokens = [];
     for (let i = 0; i < playerIds.length; i++) {
       const p = await prisma.user.create({
         data: {
           id: playerIds[i],
-          name: `Jugador ${i + 1}`,
-          surname: `Prueba E2E`,
-          username: `player_e2e_${i + 1}`,
+          nickname: `player_e2e_${i + 1}`,
           email: `player_e2e_${i + 1}@planeswalker.com`,
           role: 'player',
           xp: 0,
@@ -144,7 +155,8 @@ async function main() {
         },
       });
       players.push(p);
-      console.log(`   🎮 Jugador registrado: @${p.username} (Level ${p.level}, XP ${p.xp})`);
+      playerTokens.push(issueUserToken(p));
+      console.log(`   🎮 Jugador registrado: @${p.nickname} (Level ${p.level}, XP ${p.xp})`);
     }
 
     // ==========================================
@@ -173,7 +185,7 @@ async function main() {
       prizeDetail: '1º: 70 EUR, 2º: 40 EUR, 3º-4º: 20 EUR',
     };
 
-    const createRes = await callAPI(createTournamentHandler, 'POST', tournamentData);
+    const createRes = await callAPI(createTournamentHandler, 'POST', tournamentData, storeToken);
     if (createRes.status !== 200 || !createRes.data.ok) {
       throw new Error(`Error creando torneo: ${JSON.stringify(createRes.data)}`);
     }
@@ -219,7 +231,7 @@ async function main() {
         deck,
         openToTrade: i % 2 === 0,
         decklistUrl: `https://moxfield.com/decks/e2e-deck-${i + 1}`,
-      });
+      }, playerTokens[i]);
 
       if (enrollRes.status !== 200 || !enrollRes.data.ok) {
         throw new Error(`Inscripción fallida para ${pId}: ${JSON.stringify(enrollRes.data)}`);
@@ -240,7 +252,7 @@ async function main() {
         paymentStatus: 'Paid',
         paymentMethod: 'Cash',
         decklistValidated: true,
-      });
+      }, storeToken);
 
       if (checkInRes.status !== 200 || !checkInRes.data.ok) {
         throw new Error(`Check-in fallido para ${pId}: ${JSON.stringify(checkInRes.data)}`);
@@ -255,7 +267,7 @@ async function main() {
 
     const round1Res = await callAPI(generateRoundHandler, 'POST', {
       tournamentId: tournament.id,
-    });
+    }, storeToken);
 
     if (round1Res.status !== 200 || !round1Res.data.ok) {
       throw new Error(`Error en Ronda 1: ${JSON.stringify(round1Res.data)}`);
@@ -279,7 +291,7 @@ async function main() {
     const activeMatchRes = await callAPI(activeMatchHandler, 'GET', {
       tournamentId: tournament.id,
       userId: playerIds[0],
-    });
+    }, playerTokens[0]);
 
     if (activeMatchRes.status !== 200 || !activeMatchRes.data.ok) {
       throw new Error(`Error active-match: ${JSON.stringify(activeMatchRes.data)}`);
@@ -303,7 +315,7 @@ async function main() {
       winnerId: playerIds[0], // Jugador 1 gana
       score: '2-0',
       reportedBy: playerIds[0],
-    });
+    }, playerTokens[0]);
 
     if (report1Res.status !== 200 || !report1Res.data.ok) {
       throw new Error(`Error al reportar mesa: ${JSON.stringify(report1Res.data)}`);
@@ -325,7 +337,7 @@ async function main() {
       reason: 'Slow Play: Tomó más de 4 minutos en su fase de mantenimiento en el turno 4 de manera reiterada.',
       judgeId: storeId,
       privateNotes: 'Jugador se mostró cooperativo pero un poco distraído.',
-    });
+    }, storeToken);
 
     if (reportInfractionRes.status !== 200 || !reportInfractionRes.data.ok) {
       throw new Error(`Error registrando reporte de juez: ${JSON.stringify(reportInfractionRes.data)}`);
@@ -344,7 +356,7 @@ async function main() {
 
     const round2Res = await callAPI(generateRoundHandler, 'POST', {
       tournamentId: tournament.id,
-    });
+    }, storeToken);
 
     if (round2Res.status !== 200 || !round2Res.data.ok) {
       throw new Error(`Error en Ronda 2: ${JSON.stringify(round2Res.data)}`);
@@ -365,7 +377,7 @@ async function main() {
       winnerId: playerIds[1], // Jugador 2 gana
       score: '2-1',
       reportedBy: storeId,
-    });
+    }, storeToken);
 
     if (report2Res.status !== 200 || !report2Res.data.ok) {
       throw new Error(`Error al reportar mesa 2: ${JSON.stringify(report2Res.data)}`);
@@ -379,7 +391,7 @@ async function main() {
 
     const finalizeRes = await callAPI(finalizeTournamentHandler, 'POST', {
       tournamentId: tournament.id,
-    });
+    }, storeToken);
 
     if (finalizeRes.status !== 200 || !finalizeRes.data.ok) {
       throw new Error(`Error finalizando torneo: ${JSON.stringify(finalizeRes.data)}`);
@@ -399,15 +411,15 @@ async function main() {
 
     const dashboardRes = await callAPI(userDashboardHandler, 'GET', {
       userId: playerIds[0],
-    });
+    }, playerTokens[0]);
 
     if (dashboardRes.status !== 200 || !dashboardRes.data.ok) {
       throw new Error(`Error consultando dashboard: ${JSON.stringify(dashboardRes.data)}`);
     }
 
     const dbData = dashboardRes.data;
-    console.log(`   ✅ Datos dinámicos devueltos para ${dbData.user.name}:`);
-    console.log(`      Nombre de usuario: @${dbData.user.username}`);
+    console.log(`   ✅ Datos dinámicos devueltos para ${dbData.user.nickname}:`);
+    console.log(`      Nickname: @${dbData.user.nickname}`);
     console.log(`      Nivel: ${dbData.user.level} (XP Total: ${dbData.user.xp})`);
     console.log(`      Estadísticas Globales:`);
     console.log(`         • Torneos Jugados: ${dbData.estadisticas_globales.torneos_jugados}`);

@@ -92,7 +92,7 @@ module.exports = async (req, res) => {
       ok: true,
     });
   } catch (e) {
-    console.error('âŒ /api/analytics/track', e);
+    console.error('❌ /api/analytics/track', e);
     return res.status(500).json({ error: 'failed', details: e.message });
   }
 };

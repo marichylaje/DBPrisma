@@ -27,7 +27,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true });
   } catch (e) {
-    console.error('âŒ /api/decks/delete', e);
+    console.error('❌ /api/decks/delete', e);
     res.status(500).json({ error: 'failed' });
   }
 };

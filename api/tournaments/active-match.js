@@ -1,18 +1,24 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireUser } = require('../../lib/auth');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'GET') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
+
+    const auth = requireUser(req, res);
+    if (!auth) return;
 
     const { tournamentId, userId } = req.query || {};
 
     if (!tournamentId || !userId) {
       return res.status(400).json({ error: 'tournamentId and userId are required' });
+    }
+
+    if (userId !== auth.userId) {
+      return res.status(403).json({ error: 'forbidden' });
     }
 
     // 1. Fetch tournament details
@@ -66,7 +72,7 @@ module.exports = async (req, res) => {
       results: userMatch.results,
     });
   } catch (e) {
-    console.error('âŒ /api/tournaments/active-match error:', e);
+    console.error('❌ /api/tournaments/active-match error:', e);
     res.status(500).json({ error: 'failed', details: e.message });
   }
 };

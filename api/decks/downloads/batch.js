@@ -74,7 +74,7 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ counts });
   } catch (e) {
-    console.error('âŒ /api/decks/downloads/batch', e);
+    console.error('❌ /api/decks/downloads/batch', e);
     res.status(500).json({ error: 'failed' });
   }
 };

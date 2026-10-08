@@ -31,7 +31,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, collection: upserted });
   } catch (e) {
-    console.error('âŒ /api/collection/save', e);
+    console.error('❌ /api/collection/save', e);
     res.status(500).json({ error: 'failed', details: e.message });
   }
 };

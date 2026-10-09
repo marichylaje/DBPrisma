@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
+const { getJsonBody } = require('../../lib/requestBody');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -8,6 +9,13 @@ module.exports = async (req, res) => {
   try {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
+
+    let payload;
+    try {
+      payload = getJsonBody(req);
+    } catch (error) {
+      return res.status(400).json({ error: 'invalid_json', message: 'Request body must be valid JSON' });
+    }
 
     const {
       userKey,
@@ -24,7 +32,7 @@ module.exports = async (req, res) => {
       sideboard = [],
       deckId = null,
       oldDeckName = null
-    } = req.body || {};
+    } = payload || {};
 
     const finalCommanderName = commander?.name || cName;
     const finalCommanderId = commander?.id || cId;

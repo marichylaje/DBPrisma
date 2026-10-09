@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
+const { getJsonBody } = require('../../lib/requestBody');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -9,7 +10,14 @@ module.exports = async (req, res) => {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
 
-    const { userKey, cards } = req.body || {};
+    let payload;
+    try {
+      payload = getJsonBody(req);
+    } catch (error) {
+      return res.status(400).json({ error: 'invalid_json', message: 'Request body must be valid JSON' });
+    }
+
+    const { userKey, cards } = payload || {};
 
     if (!userKey) {
       return res.status(400).json({ error: 'userKey is required' });

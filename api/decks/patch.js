@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
+const { getJsonBody } = require('../../lib/requestBody');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -9,7 +10,14 @@ module.exports = async (req, res) => {
     if (req.method !== 'POST' && req.method !== 'PATCH') return res.status(405).end();
     if (!checkSecret(req, res)) return;
 
-    const { id, userKey, deckDescription, instagram } = req.body || {};
+    let payload;
+    try {
+      payload = getJsonBody(req);
+    } catch (error) {
+      return res.status(400).json({ error: 'invalid_json', message: 'Request body must be valid JSON' });
+    }
+
+    const { id, userKey, deckDescription, instagram } = payload || {};
     if (!id || !userKey) {
       return res.status(400).json({ error: 'id and userKey are required' });
     }

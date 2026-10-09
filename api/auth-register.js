@@ -1,6 +1,7 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../lib/prisma');
 const { checkSecret, issueUserToken } = require('../lib/auth');
+const { getJsonBody } = require('../lib/requestBody');
 const crypto = require('crypto');
 
 function hashPassword(password) {
@@ -17,7 +18,14 @@ module.exports = async (req, res) => {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
 
-    const { username, email, password } = req.body || {};
+    let payload;
+    try {
+      payload = getJsonBody(req);
+    } catch (error) {
+      return res.status(400).json({ error: 'invalid_json', message: 'Request body must be valid JSON' });
+    }
+
+    const { username, email, password } = payload || {};
 
     if (!username || !username.trim()) {
       return res.status(400).json({ error: 'username is required' });

@@ -27,6 +27,7 @@ model RateLimitHit {
 
 model AnalyticsEvent {
   id         String   @id @default(cuid())
+  nickname   String? // desnormalizado desde User.nickname (solo lectura rápida; puede ser null para usuarios anónimos)
   userKey    String
   sessionId  String
   eventName  String
@@ -70,7 +71,8 @@ model IapTrackingEvent {
 // ----------------------------------------------------
 
 model UserEntitlement {
-  userKey String @id
+  userKey  String  @id
+  nickname String? // desnormalizado desde User.nickname (solo lectura rápida; puede ser null para usuarios anónimos)
 
   subActive    Boolean   @default(false)
   subPlatform  String?
@@ -95,6 +97,7 @@ model UserEntitlement {
 
 model ProcessedIapNotification {
   id               String   @id @default(cuid())
+  nickname         String? // desnormalizado desde User.nickname (solo lectura rápida; puede ser null para usuarios anónimos)
   source           String
   notificationId   String   @unique
   notificationType String?
@@ -106,6 +109,7 @@ model ProcessedIapNotification {
 
 model UserDeck {
   id              String   @id @default(cuid())
+  nickname        String? // desnormalizado desde User.nickname (solo lectura rápida; puede ser null para usuarios anónimos)
   userKey         String
   userId          String?
   user            User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -136,6 +140,7 @@ model DeckDownload {
 
 model SharedDeck {
   id              String   @id @default(cuid())
+  nickname        String? // desnormalizado desde User.nickname (solo lectura rápida; puede ser null para usuarios anónimos)
   userKey         String?
   deckName        String
   deckDescription String?  @db.Text
@@ -365,6 +370,7 @@ model TournamentMatch {
 
 model UserCollection {
   userKey   String   @id
+  nickname  String? // desnormalizado desde User.nickname (solo lectura rápida; puede ser null para usuarios anónimos)
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   cards     Json

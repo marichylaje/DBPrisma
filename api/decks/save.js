@@ -2,6 +2,7 @@
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 const { getJsonBody } = require('../../lib/requestBody');
+const { lookupNickname } = require('../../lib/userLookup');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -52,12 +53,17 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'sideboard must be an array' });
     }
 
+    // Desnormalizado: si userKey resulta ser el id de un usuario registrado, guardamos su
+    // nickname para poder leerlo rápido al revisar la tabla manualmente (no afecta la lógica).
+    const nickname = await lookupNickname(userKey);
+
     // Modo A: actualizar por id si viene
     if (deckId) {
       const updated = await prisma.userDeck.update({
         where: { id: deckId },
         data: {
           userKey,
+          nickname,
           deckName,
           deckDescription,
           instagram,
@@ -79,6 +85,7 @@ module.exports = async (req, res) => {
       where: { userKey_deckName: { userKey, deckName: composite } },
       create: {
         userKey,
+        nickname,
         deckName,
         deckDescription,
         instagram,
@@ -90,6 +97,7 @@ module.exports = async (req, res) => {
         sideboard,
       },
       update: {
+        nickname,
         deckName, // permite renombrar (si usaste oldDeckName)
         deckDescription,
         instagram,

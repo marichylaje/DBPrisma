@@ -5,6 +5,7 @@ const { verifyAndroidSub } = require('../../lib/iap-google');
 const { checkSecret } = require('../../lib/auth');
 const { logIapEvent } = require('../../lib/iapLogger');
 const { checkRateLimitTiers } = require('../../lib/rateLimit');
+const { lookupNickname } = require('../../lib/userLookup');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -19,6 +20,10 @@ module.exports = async (req, res) => {
   if (!tiersOk) return;
   const userKey = String(req.query.userKey || '');
   if (!userKey) return res.status(400).json({ error: 'userKey required' });
+
+  // Desnormalizado: si userKey resulta ser el id de un usuario registrado, guardamos su
+  // nickname para poder leerlo rápido al revisar la tabla manualmente (no afecta la lógica).
+  const nickname = await lookupNickname(userKey);
 
   try {
     const body = req.body || {};
@@ -36,8 +41,8 @@ module.exports = async (req, res) => {
 
       await prisma.userEntitlement.upsert({
         where: { userKey },
-        create: { userKey, subActive:r.active, subPlatform:'ios', subProductId:r.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, appleOriginalTransactionId: r.originalTransactionId || null },
-        update: {           subActive:r.active, subPlatform:'ios', subProductId:r.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, appleOriginalTransactionId: r.originalTransactionId || null },
+        create: { userKey, nickname, subActive:r.active, subPlatform:'ios', subProductId:r.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, appleOriginalTransactionId: r.originalTransactionId || null },
+        update: {           nickname, subActive:r.active, subPlatform:'ios', subProductId:r.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, appleOriginalTransactionId: r.originalTransactionId || null },
       });
       logIapEvent({ source: 'apple', event: 'verify_ok', userKey, active: r.active, productId: r.productId });
       return res.json({ active:r.active, expiryMs:r.expiryMs ?? null, pending:false });
@@ -80,8 +85,8 @@ module.exports = async (req, res) => {
         const expires = new Date(Date.now() + pendingDays * 24*60*60*1000);
         await prisma.userEntitlement.upsert({
           where: { userKey },
-          create: { userKey, subActive:allowPending, subPlatform:'android', subProductId:body.productId, subExpiry: allowPending?expires:null, pendingAndroid:true, androidPurchaseToken: body.purchaseToken, lastVerifyAt:new Date(), verifyError:null },
-          update: {           subActive:allowPending, subPlatform:'android', subProductId:body.productId, subExpiry: allowPending?expires:null, pendingAndroid:true, androidPurchaseToken: body.purchaseToken, lastVerifyAt:new Date(), verifyError:null },
+          create: { userKey, nickname, subActive:allowPending, subPlatform:'android', subProductId:body.productId, subExpiry: allowPending?expires:null, pendingAndroid:true, androidPurchaseToken: body.purchaseToken, lastVerifyAt:new Date(), verifyError:null },
+          update: {           nickname, subActive:allowPending, subPlatform:'android', subProductId:body.productId, subExpiry: allowPending?expires:null, pendingAndroid:true, androidPurchaseToken: body.purchaseToken, lastVerifyAt:new Date(), verifyError:null },
         });
         return res.json({ active:allowPending, pending:true, expiryMs: allowPending? expires.getTime(): null, note:'Android pendiente hasta habilitar API' });
       }
@@ -89,8 +94,8 @@ module.exports = async (req, res) => {
       const r = await verifyAndroidSub(body.productId, body.purchaseToken);
       await prisma.userEntitlement.upsert({
         where: { userKey },
-        create: { userKey, subActive:r.active, subPlatform:'android', subProductId:body.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, pendingAndroid:false, androidPurchaseToken: body.purchaseToken, lastVerifyAt:new Date(), verifyError:null },
-        update: {           subActive:r.active, subPlatform:'android', subProductId:body.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, pendingAndroid:false, androidPurchaseToken: body.purchaseToken, lastVerifyAt:new Date(), verifyError:null },
+        create: { userKey, nickname, subActive:r.active, subPlatform:'android', subProductId:body.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, pendingAndroid:false, androidPurchaseToken: body.purchaseToken, lastVerifyAt:new Date(), verifyError:null },
+        update: {           nickname, subActive:r.active, subPlatform:'android', subProductId:body.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, pendingAndroid:false, androidPurchaseToken: body.purchaseToken, lastVerifyAt:new Date(), verifyError:null },
       });
       logIapEvent({ source: 'android', event: 'verify_ok', userKey, active: r.active, productId: r.productId });
       return res.json({ active:r.active, expiryMs:r.expiryMs ?? null, pending:false });

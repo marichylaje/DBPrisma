@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
+const { lookupNicknames } = require('../../lib/userLookup');
 
 const MAX_BATCH_SIZE = 100;
 
@@ -82,8 +83,16 @@ module.exports = async (req, res) => {
       });
     }
 
+    // Desnormalizado: si userKey resulta ser el id de un usuario registrado, guardamos su
+    // nickname para poder leerlo rápido al revisar la tabla manualmente (no afecta la lógica).
+    const nicknameByKey = await lookupNicknames(sanitizedEvents.map((e) => e.userKey));
+    const eventsWithNickname = sanitizedEvents.map((e) => ({
+      ...e,
+      nickname: nicknameByKey.get(e.userKey) || null,
+    }));
+
     await prisma.analyticsEvent.createMany({
-      data: sanitizedEvents,
+      data: eventsWithNickname,
     });
 
     return res.status(200).json({

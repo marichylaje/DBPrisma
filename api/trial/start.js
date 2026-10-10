@@ -1,8 +1,9 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
-// Inicia un trial de N días (default 5). Si ya fue concedido, devuelve el existente.
+// Inicia un trial de N días (default 15). Si ya fue concedido, devuelve el existente.
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 const { checkRateLimitTiers } = require('../../lib/rateLimit');
+const { lookupNickname } = require('../../lib/userLookup');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -29,19 +30,25 @@ module.exports = async (req, res) => {
   }
 
   // Duración de trial fijada en servidor; el cliente NO puede modificarla (evita abuso de trial infinito).
-  const nDays = Number(process.env.TRIAL_DAYS) > 0 ? Number(process.env.TRIAL_DAYS) : 5;
+  const nDays = Number(process.env.TRIAL_DAYS) > 0 ? Number(process.env.TRIAL_DAYS) : 15;
   const now = Date.now();
   const expiry = new Date(now + nDays * 24 * 60 * 60 * 1000);
+
+  // Desnormalizado: si userKey resulta ser el id de un usuario registrado, guardamos su
+  // nickname para poder leerlo rápido al revisar la tabla manualmente (no afecta la lógica).
+  const nickname = await lookupNickname(userKey);
 
   const saved = await prisma.userEntitlement.upsert({
     where: { userKey },
     create: {
       userKey,
+      nickname,
       trialGranted: true,
       trialStart: new Date(now),
       trialExpiry: expiry,
     },
     update: {
+      nickname,
       trialGranted: true,
       trialStart: new Date(now),
       trialExpiry: expiry,

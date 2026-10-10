@@ -2,6 +2,7 @@
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 const { checkRateLimitTiers } = require('../../lib/rateLimit');
+const { lookupNickname } = require('../../lib/userLookup');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -67,9 +68,14 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'sideboard must be an array' });
     }
 
+    // Desnormalizado: si userKey resulta ser el id de un usuario registrado, guardamos su
+    // nickname para poder leerlo rápido al revisar la tabla manualmente (no afecta la lógica).
+    const nickname = await lookupNickname(userKey);
+
     const created = await prisma.sharedDeck.create({
       data: {
         userKey,
+        nickname,
         deckName,
         deckDescription,
         commanderName: finalCommanderName,

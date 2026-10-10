@@ -44,6 +44,7 @@ module.exports = async (req, res) => {
       },
       data: {
         userId,
+        nickname: user.nickname,
       },
     });
 
@@ -55,6 +56,7 @@ module.exports = async (req, res) => {
       },
       data: {
         userId,
+        nickname: user.nickname,
       },
     });
 

@@ -72,6 +72,17 @@ module.exports = async (req, res) => {
         data: updateData,
         select: selectFields,
       });
+
+      // Mantiene sincronizada la copia desnormalizada "nickname" en las tablas
+      // relacionadas cuando el usuario cambia su nickname (no borra ni mueve datos).
+      await Promise.all([
+        prisma.userDeck.updateMany({ where: { userId }, data: { nickname } }),
+        prisma.userCollection.updateMany({ where: { userId }, data: { nickname } }),
+        prisma.userEntitlement.updateMany({ where: { userKey: userId }, data: { nickname } }),
+        prisma.sharedDeck.updateMany({ where: { userKey: userId }, data: { nickname } }),
+        prisma.analyticsEvent.updateMany({ where: { userKey: userId }, data: { nickname } }),
+        prisma.processedIapNotification.updateMany({ where: { userKey: userId }, data: { nickname } }),
+      ]);
     } else {
       upserted = await prisma.user.create({
         data: {

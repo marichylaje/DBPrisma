@@ -81,7 +81,7 @@ Opcionales para reconciliación pull:
 
 ### Operación
 - `CRON_SECRET` (para invocación de cron por Authorization Bearer)
-- `TRIAL_DAYS` (default interno: 5)
+- `TRIAL_DAYS` (default interno: 15)
 - `ALLOW_PENDING_ANDROID_PREMIUM` (feature flag)
 - `DISABLE_ANDROID_VERIFY` (feature flag, ⚠️ **peligrosa**: desactiva la verificación real de compras Android contra Google Play y concede acceso "pendiente" solo confiando en lo que envía el cliente. Pensada como bypass temporal mientras no se tenga acceso a la API de Google Play; cada uso queda auditado con `logIapEvent` (evento `verify_bypassed_unverified_grant`, incluye si corrió en producción). Debe desactivarse (`false`) en cuanto la verificación real esté disponible)
 - `PENDING_DEFAULT_DAYS` (días de acceso "pendiente" otorgados mientras `DISABLE_ANDROID_VERIFY=true`; el backend lo acota a un máximo de 30 días sin importar el valor configurado)

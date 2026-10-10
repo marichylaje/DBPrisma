@@ -14,10 +14,26 @@ module.exports = async (req, res) => {
     const parsedKey = parseDeckKey(deckKey);
 
     const deckType = rawDeckType || parsedKey?.type;
-    const deckId = rawDeckId || (parsedKey?.type === 'cloud' ? parsedKey.id : undefined);
+    const deckId =
+      rawDeckId ||
+      (parsedKey?.type === 'cloud' || parsedKey?.type === 'alldeck' ? parsedKey.id : undefined);
 
-    if (!deckType || !['cloud', 'precon', 'influencer'].includes(deckType)) {
-      return res.status(400).json({ error: 'deckType must be cloud, precon or influencer' });
+    if (!deckType || !['cloud', 'alldeck', 'precon', 'influencer'].includes(deckType)) {
+      return res.status(400).json({ error: 'deckType must be cloud, alldeck, precon or influencer' });
+    }
+
+    if (deckType === 'alldeck') {
+      if (!deckId) {
+        return res.status(400).json({ error: 'deckId is required for alldeck decks' });
+      }
+
+      const deck = await prisma.allDeck.update({
+        where: { id: deckId },
+        data: { downloadCount: { increment: 1 } },
+        select: { downloadCount: true },
+      });
+
+      return res.status(200).json({ success: true, count: Number(deck.downloadCount ?? 0) });
     }
 
     if (deckType === 'cloud') {

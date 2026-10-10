@@ -48,6 +48,11 @@ module.exports = async (req, res) => {
       },
     });
 
+    const allDecksUpdated = await prisma.allDeck.updateMany({
+      where: { userKey, userId: null },
+      data: { userId, nickname: user.nickname },
+    });
+
     // Migrate collection
     const collectionUpdated = await prisma.userCollection.updateMany({
       where: {
@@ -64,6 +69,7 @@ module.exports = async (req, res) => {
       ok: true,
       migrated: {
         decks: decksUpdated.count,
+        allDecks: allDecksUpdated.count,
         collection: collectionUpdated.count,
       },
     });

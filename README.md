@@ -188,7 +188,8 @@ Autenticación:
   - snapshots (`statsJson`, `badgesJson`)
 
 ### Mazos y colección
-- `UserDeck` (mazos privados por usuario)
+- `UserDeck` (mazos privados por usuario; también los exportados activamente a "Decks de Usuario")
+- `AllDecks` (modelo `AllDeck`; mazos de 97-103 cartas compartidos automáticamente, con `cardCount` indexado para filtrar en DB)
 - `SharedDeck` (mazos compartidos con expiración reactiva)
 - `UserCollection` (cartas por `userKey`)
 - `DeckDownload` (contadores de descargas no-cloud)

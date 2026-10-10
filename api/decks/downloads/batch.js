@@ -18,6 +18,7 @@ module.exports = async (req, res) => {
     }
 
     const cloudIds = [];
+    const allDeckIds = [];
     const nonCloudKeys = [];
 
     for (const key of deckKeys) {
@@ -29,9 +30,23 @@ module.exports = async (req, res) => {
 
       if (parsed.type === 'cloud') {
         cloudIds.push(parsed.id);
+      } else if (parsed.type === 'alldeck') {
+        allDeckIds.push(parsed.id);
       } else {
         nonCloudKeys.push(parsed.deckKey);
       }
+    }
+
+    const allDeckCounts = new Map();
+    if (allDeckIds.length) {
+      const rows = await prisma.allDeck.findMany({
+        where: { id: { in: allDeckIds } },
+        select: { id: true, downloadCount: true },
+      });
+
+      rows.forEach((row) => {
+        allDeckCounts.set(row.id, Number(row.downloadCount ?? 0));
+      });
     }
 
     const cloudCounts = new Map();
@@ -67,6 +82,8 @@ module.exports = async (req, res) => {
 
       if (parsed.type === 'cloud') {
         counts[key] = cloudCounts.get(parsed.id) ?? 0;
+      } else if (parsed.type === 'alldeck') {
+        counts[key] = allDeckCounts.get(parsed.id) ?? 0;
       } else {
         counts[key] = deckDownloadCounts.get(parsed.deckKey) ?? 0;
       }

@@ -77,6 +77,7 @@ module.exports = async (req, res) => {
       // relacionadas cuando el usuario cambia su nickname (no borra ni mueve datos).
       await Promise.all([
         prisma.userDeck.updateMany({ where: { userId }, data: { nickname } }),
+        prisma.allDeck.updateMany({ where: { userId }, data: { nickname } }),
         prisma.userCollection.updateMany({ where: { userId }, data: { nickname } }),
         prisma.userEntitlement.updateMany({ where: { userKey: userId }, data: { nickname } }),
         prisma.sharedDeck.updateMany({ where: { userKey: userId }, data: { nickname } }),

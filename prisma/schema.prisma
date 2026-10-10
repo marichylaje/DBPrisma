@@ -196,6 +196,7 @@ model User {
   decks                    UserDeck[]
   allDecks                 AllDeck[]
   collections              UserCollection[]
+  wishlists                UserWishlist[]
   friendRequestsSent       Friendship[]            @relation("FriendRequester")
   friendRequestsReceived   Friendship[]            @relation("FriendAddressee")
   friendNightEventsCreated FriendNightEvent[]
@@ -402,6 +403,20 @@ model TournamentMatch {
 model UserCollection {
   userKey   String   @id
   nickname  String? // desnormalizado desde User.nickname (solo lectura rápida; puede ser null para usuarios anónimos)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cards     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// Wishlist por usuario/dispositivo (lista de nombres de carta). Se sincroniza tras cada
+// modificación local y permite que los amigos la consulten vía /api/friends/data.
+model UserWishlist {
+  userKey   String   @id
+  nickname  String?
   userId    String?
   user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   cards     Json

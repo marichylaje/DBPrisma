@@ -1,4 +1,4 @@
-﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
+const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 const { getJsonBody } = require('../../lib/requestBody');
@@ -23,36 +23,23 @@ module.exports = async (req, res) => {
     if (!userKey) {
       return res.status(400).json({ error: 'userKey is required' });
     }
-    if (!Array.isArray(cards)) {
-      return res.status(400).json({ error: 'cards must be an array' });
+    if (!Array.isArray(cards) || cards.some((name) => typeof name !== 'string')) {
+      return res.status(400).json({ error: 'cards must be an array of strings' });
     }
 
-    // Desnormalizado: si userKey resulta ser el id de un usuario registrado, guardamos su
-    // nickname para poder leerlo rápido al revisar la tabla manualmente (no afecta la lógica).
     const owner = await resolveOwner(req, userKey);
     const nickname = owner?.nickname ?? null;
-    // Vincular la colección con la cuenta permite que los amigos puedan consultarla.
     const ownerData = owner ? { userId: owner.id } : {};
 
-    const upserted = await prisma.userCollection.upsert({
+    await prisma.userWishlist.upsert({
       where: { userKey },
-      create: {
-        userKey,
-        nickname,
-        cards,
-        ...ownerData,
-      },
-      update: {
-        nickname,
-        cards,
-        ...ownerData,
-      },
+      create: { userKey, nickname, cards, ...ownerData },
+      update: { nickname, cards, ...ownerData },
     });
 
-    res.status(200).json({ ok: true, collection: upserted });
+    res.status(200).json({ ok: true, count: cards.length });
   } catch (e) {
-    console.error('❌ /api/collection/save', e);
+    console.error('❌ /api/wishlist/save', e);
     res.status(500).json({ error: 'failed', details: e.message });
   }
 };
-

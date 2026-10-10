@@ -65,9 +65,15 @@ module.exports = async (req, res) => {
       },
     });
 
+    const wishlistUpdated = await prisma.userWishlist.updateMany({
+      where: { userKey, userId: null },
+      data: { userId, nickname: user.nickname },
+    });
+
     res.status(200).json({
       ok: true,
       migrated: {
+        wishlist: wishlistUpdated.count,
         decks: decksUpdated.count,
         allDecks: allDecksUpdated.count,
         collection: collectionUpdated.count,

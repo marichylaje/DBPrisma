@@ -1,6 +1,6 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { checkSecret, getOptionalUserId } = require('../../lib/auth');
 const { lookupNicknames } = require('../../lib/userLookup');
 
 const DEFAULT_MIN_CARDS = 97;
@@ -30,22 +30,34 @@ module.exports = async (req, res) => {
       .map((key) => key.trim())
       .filter(Boolean);
 
+    const jwtUserId = getOptionalUserId(req);
+
     const decks = await prisma.allDeck.findMany({
       where: {
         cardCount: { gte: minCards, lte: maxCards },
-        ...(userKeys.length ? { userKey: { in: userKeys } } : {}),
+        ...(userKeys.length
+          ? {
+              OR: [
+                { userKey: { in: userKeys } },
+                ...(jwtUserId ? [{ userId: jwtUserId }] : []),
+              ],
+            }
+          : {}),
       },
       orderBy: { updatedAt: 'desc' },
       ...(limit > 0 ? { take: Math.min(limit, 1000) } : {}),
     });
 
     // Decks sin nickname guardado (p. ej. usuario que se registró después de compartir).
-    const missing = decks.filter((deck) => !deck.nickname).map((deck) => deck.userKey);
+    const missing = decks
+      .filter((deck) => !deck.nickname)
+      .map((deck) => deck.userId || deck.userKey);
     const nicknames = await lookupNicknames(missing);
 
     const responseDecks = decks.map((deck) => ({
       ...deck,
-      nickname: deck.nickname ?? nicknames.get(deck.userKey) ?? null,
+      nickname:
+        deck.nickname ?? nicknames.get(deck.userId || deck.userKey) ?? null,
       downloadCount: Number(deck.downloadCount ?? 0),
       sideboard: Array.isArray(deck.sideboard) ? deck.sideboard : [],
       commander: deck.commanderName

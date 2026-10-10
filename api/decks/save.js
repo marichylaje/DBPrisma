@@ -2,7 +2,7 @@
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 const { getJsonBody } = require('../../lib/requestBody');
-const { lookupNickname } = require('../../lib/userLookup');
+const { resolveOwner } = require('../../lib/userLookup');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -55,7 +55,9 @@ module.exports = async (req, res) => {
 
     // Desnormalizado: si userKey resulta ser el id de un usuario registrado, guardamos su
     // nickname para poder leerlo rápido al revisar la tabla manualmente (no afecta la lógica).
-    const nickname = await lookupNickname(userKey);
+    const owner = await resolveOwner(req, userKey);
+    const nickname = owner?.nickname ?? null;
+    const userId = owner?.id ?? null;
 
     // Modo A: actualizar por id si viene
     if (deckId) {
@@ -64,6 +66,7 @@ module.exports = async (req, res) => {
         data: {
           userKey,
           nickname,
+          userId,
           deckName,
           deckDescription,
           instagram,
@@ -86,6 +89,7 @@ module.exports = async (req, res) => {
       create: {
         userKey,
         nickname,
+        userId,
         deckName,
         deckDescription,
         instagram,
@@ -98,6 +102,7 @@ module.exports = async (req, res) => {
       },
       update: {
         nickname,
+        userId,
         deckName, // permite renombrar (si usaste oldDeckName)
         deckDescription,
         instagram,

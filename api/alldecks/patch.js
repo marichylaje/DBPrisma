@@ -1,6 +1,6 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { checkSecret, getOptionalUserId } = require('../../lib/auth');
 const { getJsonBody } = require('../../lib/requestBody');
 
 module.exports = async (req, res) => {
@@ -22,7 +22,10 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'id and userKey are required' });
     }
 
-    const existing = await prisma.allDeck.findFirst({ where: { id, userKey } });
+    const jwtUserId = getOptionalUserId(req);
+    const existing = await prisma.allDeck.findFirst({
+      where: { id, OR: [{ userKey }, ...(jwtUserId ? [{ userId: jwtUserId }] : [])] },
+    });
     if (!existing) {
       return res.status(403).json({ error: 'not found or unauthorized' });
     }

@@ -2,7 +2,7 @@ const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
 const { getJsonBody } = require('../../lib/requestBody');
-const { lookupUser } = require('../../lib/userLookup');
+const { resolveOwner } = require('../../lib/userLookup');
 
 const MIN_CARDS = 97;
 const MAX_CARDS = 103;
@@ -68,7 +68,7 @@ module.exports = async (req, res) => {
         .json({ error: 'card_count_out_of_range', cardCount, min: MIN_CARDS, max: MAX_CARDS });
     }
 
-    const user = await lookupUser(userKey);
+    const user = await resolveOwner(req, userKey);
     const data = {
       nickname: user?.nickname ?? null,
       userId: user?.id ?? null,
@@ -83,11 +83,18 @@ module.exports = async (req, res) => {
       cardCount,
     };
 
-    const deck = await prisma.allDeck.upsert({
-      where: { userKey_deckName: { userKey, deckName } },
-      create: { userKey, deckName, ...data },
-      update: data,
-    });
+    // Misma cuenta en varios dispositivos: un deck con el mismo nombre se actualiza en vez de duplicarse.
+    const existing = user
+      ? await prisma.allDeck.findFirst({ where: { userId: user.id, deckName } })
+      : null;
+
+    const deck = existing
+      ? await prisma.allDeck.update({ where: { id: existing.id }, data: { ...data, userKey } })
+      : await prisma.allDeck.upsert({
+          where: { userKey_deckName: { userKey, deckName } },
+          create: { userKey, deckName, ...data },
+          update: data,
+        });
 
     res.status(200).json({ ok: true, deck });
   } catch (e) {

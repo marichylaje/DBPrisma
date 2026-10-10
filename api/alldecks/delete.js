@@ -1,6 +1,6 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { checkSecret, getOptionalUserId } = require('../../lib/auth');
 const { getJsonBody } = require('../../lib/requestBody');
 
 /**
@@ -26,8 +26,12 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'userKey and id|deckName required' });
     }
 
+    const jwtUserId = getOptionalUserId(req);
+    const owner = jwtUserId
+      ? { OR: [{ userKey }, { userId: jwtUserId }] }
+      : { userKey };
     const result = await prisma.allDeck.deleteMany({
-      where: id ? { id, userKey } : { userKey, deckName },
+      where: id ? { id, ...owner } : { deckName, ...owner },
     });
 
     res.status(200).json({ ok: true, deleted: result.count });

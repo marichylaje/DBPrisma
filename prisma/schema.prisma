@@ -9,6 +9,19 @@ generator client {
 }
 
 // ----------------------------------------------------
+// RATE LIMITING (protección básica anti-abuso a nivel app)
+// ----------------------------------------------------
+
+// Contador de ventana fija compartido entre todas las instancias serverless.
+// key = "<nombreRegla>:<ip>". Se actualiza con un UPSERT atómico (ver lib/rateLimit.js).
+model RateLimitHit {
+  key         String   @id
+  count       Int      @default(1)
+  windowStart DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ----------------------------------------------------
 // TABLAS PROPIAS / COMPARTIDAS DE TRACKING Y ANALÍTICA
 // ----------------------------------------------------
 

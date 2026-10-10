@@ -261,8 +261,8 @@ Recomendado antes de publicar:
 
 ## Limitaciones conocidas
 
-- La autenticación actual es por secreto compartido entre cliente y backend (`x-app-secret`), sin JWT/sesión por usuario.
-- No hay rate limiting/WAF a nivel aplicación.
+- La autenticación actual es por secreto compartido entre cliente y backend (`x-app-secret`), sin JWT/sesión por usuario (excepto auth-login/auth-register que sí emiten JWT).
+- Rate limiting básico por IP implementado a nivel aplicación (`lib/rateLimit.js`, contador en Postgres) en auth-login, auth-register, iap/verify, trial/start y share/create. Recomendado complementar con reglas de Vercel WAF (edge, antes de invocar la función) — ver `IAP_PRODUCTION_CHECKLIST.md`.
 - Debes configurar `APP_ALLOWED_ORIGINS` explícitamente en producción.
 - Hay scripts de test desactualizados respecto al esquema actual (deben alinearse antes de usarlos como gate formal de release).
 

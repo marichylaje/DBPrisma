@@ -4,12 +4,15 @@ const { verifyAppleReceipt } = require('../../lib/iap-apple');
 const { verifyAndroidSub } = require('../../lib/iap-google');
 const { checkSecret } = require('../../lib/auth');
 const { logIapEvent } = require('../../lib/iapLogger');
+const { checkRateLimit } = require('../../lib/rateLimit');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   if (req.method !== 'POST') return res.status(405).end();
   if (!checkSecret(req, res)) return;
+  // Evita fuzzing/spam de recibos de compra contra Apple/Google desde una misma IP.
+  if (!(await checkRateLimit(req, res, { name: 'iap-verify', limit: 20, windowSeconds: 600 }))) return;
   const userKey = String(req.query.userKey || '');
   if (!userKey) return res.status(400).json({ error: 'userKey required' });
 

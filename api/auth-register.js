@@ -2,6 +2,7 @@ const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../lib/prisma');
 const { checkSecret, issueUserToken } = require('../lib/auth');
 const { getJsonBody } = require('../lib/requestBody');
+const { checkRateLimit } = require('../lib/rateLimit');
 const crypto = require('crypto');
 
 function hashPassword(password) {
@@ -17,6 +18,8 @@ module.exports = async (req, res) => {
   try {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
+    // Evita creación masiva de cuentas / enumeración de usuarios y emails desde una misma IP.
+    if (!(await checkRateLimit(req, res, { name: 'auth-register', limit: 5, windowSeconds: 3600 }))) return;
 
     let payload;
     try {

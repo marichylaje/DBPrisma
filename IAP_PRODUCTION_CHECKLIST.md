@@ -35,7 +35,7 @@ Opcionales (solo si se activa reconciliación pull para iOS):
 - [X] `APPLE_IAP_PRIVATE_KEY_BASE64` — clave `.p8` de App Store Connect > Users and Access > Integrations > In-App Purchase, en base64
 
 Opcional (cron):
-- [V] `CRON_SECRET` — si quieres que Vercel Cron se autentique automáticamente contra `/api/admin/reconcile-subscriptions`
+- [X] `CRON_SECRET` — si quieres que Vercel Cron se autentique automáticamente contra `/api/admin/reconcile-subscriptions`
 
 ## 2. Configuración en App Store Connect
 
@@ -50,12 +50,12 @@ Opcional (cron):
 
 ## 4. Cron de reconciliación
 
-- [ ] Confirmar que `vercel.json` tiene la entrada `crons` para `/api/admin/reconcile-subscriptions`
-- [ ] Revisar el plan de Vercel: Hobby limita a 1 ejecución/día; ajustar el `schedule` si aplica
+- [X] Confirmar que `vercel.json` tiene la entrada `crons` para `/api/admin/reconcile-subscriptions`
+- [X] Revisar el plan de Vercel: Hobby limita a 1 ejecución/día; ajustar el `schedule` si aplica
 
 ## 5. Pruebas antes de salir a producción
 
-- [ ] `node test_iap_entitlement.js` (requiere migración ya aplicada) — valida mapeos de estado y las constraints anti-replay
+- [X] `node test_iap_entitlement.js` (requiere migración ya aplicada) — valida mapeos de estado y las constraints anti-replay
 - [ ] Enviar una notificación de prueba desde App Store Connect (`SendConsumptionInformation`/Test) y confirmar que llega a `/api/iap/apple-webhook`
 - [ ] Enviar un mensaje de prueba desde la consola de Pub/Sub y confirmar que `/api/iap/google-webhook` responde 200
 - [ ] Ejecutar `node verify_iap_deploy.js` contra el entorno de producción (ver sección siguiente)
@@ -63,5 +63,5 @@ Opcional (cron):
 ## 6. Post-deploy
 
 - [ ] Correr `node verify_iap_deploy.js` apuntando a la URL de producción
-- [ ] Revisar logs de Vercel filtrando `"scope":"iap"` para confirmar que los eventos se registran correctamente
+- [X] Revisar logs de Vercel filtrando `"scope":"iap"` para confirmar que los eventos se registran correctamente
 - [ ] Monitorear `skippedIosNoServerApi` en la respuesta de `/api/admin/reconcile-subscriptions` — si es igual al total de subs iOS activas, la App Store Server API no está configurada

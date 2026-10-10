@@ -58,7 +58,7 @@ Dominios principales:
 - `APP_BACKEND_SECRET`
 - `APP_JWT_SECRET`
 
-### CORS
+### CORS (DONE)
 - `APP_ALLOWED_ORIGINS` (lista separada por comas, ej: `https://app.midominio.com,https://admin.midominio.com`)
 
 ### IAP Apple

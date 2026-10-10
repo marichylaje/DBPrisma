@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { requireUser } = require('../../lib/auth');
+const { getQueryParam } = require('../../lib/requestQuery');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -11,7 +12,7 @@ module.exports = async (req, res) => {
     const auth = requireUser(req, res);
     if (!auth) return;
 
-    const { userId } = req.query || {};
+    const userId = getQueryParam(req, 'userId');
 
     if (!userId) {
       return res.status(400).json({ error: 'userId is required' });

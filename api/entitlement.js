@@ -2,6 +2,7 @@
 // Estado unificado de acceso premium (suscripción válida o trial activo)
 const { prisma } = require('../lib/prisma');
 const { checkSecret } = require('../lib/auth');
+const { getQueryParam } = require('../lib/requestQuery');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -9,7 +10,7 @@ module.exports = async (req, res) => {
   if (req.method !== 'GET') return res.status(405).end();
   if (!checkSecret(req, res)) return;
 
-  const userKey = String(req.query.userKey || '');
+  const userKey = String(getQueryParam(req, 'userKey') || '');
   if (!userKey) return res.status(400).json({ error: 'userKey required' });
 
   const ent = await prisma.userEntitlement.findUnique({ where: { userKey } });

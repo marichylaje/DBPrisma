@@ -2,7 +2,7 @@
 // Inicia un trial de N días (default 5). Si ya fue concedido, devuelve el existente.
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
-const { checkRateLimit } = require('../../lib/rateLimit');
+const { checkRateLimitTiers } = require('../../lib/rateLimit');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -10,7 +10,11 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
   if (!checkSecret(req, res)) return;
   // Evita abuso de trials gratuitos (múltiples trials por IP) aunque cambien el userKey.
-  if (!(await checkRateLimit(req, res, { name: 'trial-start', limit: 5, windowSeconds: 86400 }))) return;
+  const tiersOk = await checkRateLimitTiers(req, res, 'trial-start', [
+    { id: 'burst', limit: 3, windowSeconds: 30 },
+    { id: 'sustained', limit: 5, windowSeconds: 86400 },
+  ]);
+  if (!tiersOk) return;
 
   const { userKey } = req.body || {};
   if (!userKey) return res.status(400).json({ error: 'userKey required' });

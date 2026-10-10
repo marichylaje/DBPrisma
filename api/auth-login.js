@@ -2,8 +2,14 @@ const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../lib/prisma');
 const { checkSecret, issueUserToken } = require('../lib/auth');
 const { getJsonBody } = require('../lib/requestBody');
-const { checkRateLimit } = require('../lib/rateLimit');
+const { checkRateLimitTiers, isFailureLocked, recordFailure } = require('../lib/rateLimit');
 const crypto = require('crypto');
+
+// Intentos fallidos permitidos por cuenta (independiente de la IP del atacante) antes
+// de bloquear temporalmente el login a ese username — protege contra credential
+// stuffing/fuerza bruta dirigida incluso si el atacante rota de IP.
+const LOGIN_FAIL_LIMIT = 8;
+const LOGIN_FAIL_WINDOW_SECONDS = 900; // 15 min
 
 function verifyPassword(password, stored) {
   try {
@@ -22,8 +28,12 @@ module.exports = async (req, res) => {
   try {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
-    // Brute-force protection: pocos intentos de login por IP en ventanas cortas.
-    if (!(await checkRateLimit(req, res, { name: 'auth-login', limit: 10, windowSeconds: 600 }))) return;
+    // Fuerza bruta por IP: ráfaga corta + sostenido en el tiempo.
+    const tiersOk = await checkRateLimitTiers(req, res, 'auth-login', [
+      { id: 'burst', limit: 5, windowSeconds: 10 },
+      { id: 'sustained', limit: 10, windowSeconds: 600 },
+    ]);
+    if (!tiersOk) return;
 
     let payload;
     try {
@@ -39,6 +49,16 @@ module.exports = async (req, res) => {
     }
     if (!password) {
       return res.status(400).json({ error: 'password is required' });
+    }
+
+    // Patrón de abuso: cuenta bloqueada temporalmente tras demasiados fallos recientes,
+    // sin importar desde qué IP vengan los intentos.
+    const loginFailKey = `login-fail:${username.trim().toLowerCase()}`;
+    if (await isFailureLocked(loginFailKey, LOGIN_FAIL_LIMIT, LOGIN_FAIL_WINDOW_SECONDS)) {
+      return res.status(423).json({
+        error: 'account_temporarily_locked',
+        message: 'Demasiados intentos fallidos. Intenta de nuevo en unos minutos.',
+      });
     }
 
     // Find user by username (case-insensitive), must be a native auth user (has passwordHash)
@@ -60,6 +80,7 @@ module.exports = async (req, res) => {
     });
 
     if (!user || !user.passwordHash || !verifyPassword(password, user.passwordHash)) {
+      await recordFailure(loginFailKey, LOGIN_FAIL_WINDOW_SECONDS);
       return res.status(401).json({ error: 'invalid_credentials', message: 'Username or password is incorrect' });
     }
 

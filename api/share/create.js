@@ -1,7 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { checkSecret } = require('../../lib/auth');
-const { checkRateLimit } = require('../../lib/rateLimit');
+const { checkRateLimitTiers } = require('../../lib/rateLimit');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -10,7 +10,11 @@ module.exports = async (req, res) => {
     if (req.method !== 'POST') return res.status(405).end();
     if (!checkSecret(req, res)) return;
     // Evita spam de mazos públicos compartidos desde una misma IP.
-    if (!(await checkRateLimit(req, res, { name: 'share-create', limit: 20, windowSeconds: 600 }))) return;
+    const tiersOk = await checkRateLimitTiers(req, res, 'share-create', [
+      { id: 'burst', limit: 8, windowSeconds: 10 },
+      { id: 'sustained', limit: 20, windowSeconds: 600 },
+    ]);
+    if (!tiersOk) return;
 
     // Reactive database cleanup: delete rows older than 3 days
     try {

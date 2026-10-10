@@ -251,7 +251,7 @@ Notas:
 ## Checklist de salida a producción
 
 Referencia principal: `IAP_PRODUCTION_CHECKLIST.md`.
-
+## ALL CHECKED
 Recomendado antes de publicar:
 1. Confirmar variables de entorno en producción.
 2. Ejecutar migraciones de Prisma y validar constraints únicas de IAP.

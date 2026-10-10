@@ -69,11 +69,12 @@ Opcional (cron):
 ## 7. Rate limiting / protección básica (WAF)
 
 Capa de aplicación (ya implementada en código, requiere la migración de este PR):
-- [ ] Aplicar la migración `20261010120000_add_rate_limit_hit` (`npx prisma migrate deploy` + `npx prisma generate`)
-- [ ] Confirmar que `/api/auth-login`, `/api/auth-register`, `/api/iap/verify`, `/api/trial/start` y `/api/share/create` responden `429` al superar el límite (ver `lib/rateLimit.js` para los límites por endpoint)
+- [X] Aplicar la migración `20261010120000_add_rate_limit_hit` (`npx prisma migrate deploy` + `npx prisma generate`)
+- [ ] Confirmar que `/api/auth-login`, `/api/auth-register`, `/api/iap/verify`, `/api/trial/start` y `/api/share/create` responden `429` (ráfaga o sostenido) al superar sus límites por IP — ver tiers `burst`/`sustained` en cada archivo
+- [ ] Confirmar que `/api/auth-login` responde `423 account_temporarily_locked` tras varios intentos de password incorrecta seguidos para el mismo username (bloqueo por patrón de abuso, independiente de la IP — ver `LOGIN_FAIL_LIMIT`/`LOGIN_FAIL_WINDOW_SECONDS` en `api/auth-login.js`)
 - [ ] Si se agrega una región/CDN propia delante de Vercel, confirmar que reenvía `x-forwarded-for` correctamente (el limitador usa ese header para identificar la IP)
 
 Capa de edge/WAF (recomendado, complementa lo anterior — bloquea antes de invocar la función, sin consumir DB):
-- [ ] Activar Vercel WAF Rate Limiting (Project > Firewall > Configure > + New Rule) para los paths sensibles de arriba. Disponible en todos los planes; Hobby permite 1 regla de rate limit / hasta 3 reglas custom en total, así que conviene agrupar varios paths sensibles en una sola regla ("Path is one of: ...").
+- [X] Activar Vercel WAF Rate Limiting (Project > Firewall > Configure > + New Rule) para los paths sensibles de arriba. Disponible en todos los planes; Hobby permite 1 regla de rate limit / hasta 3 reglas custom en total, así que conviene agrupar varios paths sensibles en una sola regla ("Path is one of: ...").
 - [ ] (Opcional, según presupuesto de abuso) Activar IP Blocking / Managed Rulesets de Vercel WAF para bloquear tráfico de bots conocidos.
 - [ ] Revisar la sección "Firewall" del dashboard de Vercel tras el primer día en producción para ver tráfico bloqueado/real antes de endurecer límites.

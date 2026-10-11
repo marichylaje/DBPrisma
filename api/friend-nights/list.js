@@ -59,6 +59,7 @@ module.exports = async (req, res) => {
         name: player.user?.nickname || null,
         decks: player.decks,
         rule0: player.rule0,
+        isMe: player.userId === auth.userId,
       })),
     }));
 

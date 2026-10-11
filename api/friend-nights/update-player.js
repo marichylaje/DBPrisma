@@ -47,6 +47,12 @@ module.exports = async (req, res) => {
       if (!Array.isArray(decks)) {
         return res.status(400).json({ error: 'decks must be an array' });
       }
+      const validDeck = (deck) =>
+        typeof deck === 'string' ||
+        (deck && typeof deck === 'object' && typeof deck.name === 'string' && deck.name.trim());
+      if (!decks.every(validDeck) || decks.length > 50 || JSON.stringify(decks).length > 2_000_000) {
+        return res.status(400).json({ error: 'invalid decks payload' });
+      }
       updateData.decks = decks;
     }
 

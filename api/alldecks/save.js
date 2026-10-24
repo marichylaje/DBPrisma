@@ -89,17 +89,26 @@ module.exports = async (req, res) => {
       ? await prisma.allDeck.findFirst({ where: { userId, deckName } })
       : null;
 
-    const deck = existing
-      ? await prisma.allDeck.upsert({
-          where: { userKey_deckName: { userKey: existing.userKey, deckName } },
-          create: { userKey: existing.userKey, deckName, ...data },
-          update: { ...data, userKey },
-        })
-      : await prisma.allDeck.upsert({
-          where: { userKey_deckName: { userKey, deckName } },
-          create: { userKey, deckName, ...data },
-          update: data,
+    const targetUserKey = existing ? existing.userKey : userKey;
+
+    let deck;
+    try {
+      deck = await prisma.allDeck.upsert({
+        where: { userKey_deckName: { userKey: targetUserKey, deckName } },
+        create: { userKey: targetUserKey, deckName, ...data },
+        update: { ...data, userKey },
+      });
+    } catch (error) {
+      // Si ocurre una colisión por concurrencia paralela, reintentamos con update directo
+      if (error.code === 'P2002') {
+        deck = await prisma.allDeck.update({
+          where: { userKey_deckName: { userKey: targetUserKey, deckName } },
+          data: { ...data, userKey },
         });
+      } else {
+        throw error;
+      }
+    }
 
     res.status(200).json({ ok: true, deck });
   } catch (e) {

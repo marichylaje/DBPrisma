@@ -90,7 +90,11 @@ module.exports = async (req, res) => {
       : null;
 
     const deck = existing
-      ? await prisma.allDeck.update({ where: { id: existing.id }, data: { ...data, userKey } })
+      ? await prisma.allDeck.upsert({
+          where: { userKey_deckName: { userKey: existing.userKey, deckName } },
+          create: { userKey: existing.userKey, deckName, ...data },
+          update: { ...data, userKey },
+        })
       : await prisma.allDeck.upsert({
           where: { userKey_deckName: { userKey, deckName } },
           create: { userKey, deckName, ...data },

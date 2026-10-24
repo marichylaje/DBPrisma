@@ -1,6 +1,7 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { requireUser } = require('../../lib/auth');
+const { sendServerError } = require('../../lib/httpError');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -58,7 +59,6 @@ module.exports = async (req, res) => {
       event,
     });
   } catch (e) {
-    console.error('Friend Night join error:', e);
-    return res.status(500).json({ error: 'failed', details: e.message });
+    return sendServerError(res, '/api/friend-nights/join', e);
   }
 };

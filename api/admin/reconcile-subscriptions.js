@@ -4,24 +4,13 @@
 // (entrega fallida, suscripción push mal configurada, etc.) revalidando contra la fuente de verdad.
 //
 // Pensado para invocarse por Vercel Cron (GET) o manualmente (POST). Vercel Cron no permite
-// headers custom, así que además de x-app-secret se acepta `Authorization: Bearer <CRON_SECRET>`.
+// headers custom, así que además de x-app-secret (ADMIN_SECRET) se acepta `Authorization: Bearer <CRON_SECRET>`.
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { getSubscriptionStateByToken, mapGoogleStateToStatus } = require('../../lib/iap-google');
 const { getSubscriptionStatusByOriginalTransactionId } = require('../../lib/iap-apple-server');
-const { checkSecret } = require('../../lib/auth');
+const { checkAdminSecret } = require('../../lib/auth');
 const { logIapEvent } = require('../../lib/iapLogger');
-
-function isAuthorized(req) {
-  const expected = process.env.APP_BACKEND_SECRET;
-  if (expected && req.headers['x-app-secret'] === expected) return true;
-
-  const cronSecret = process.env.CRON_SECRET;
-  const auth = req.headers['authorization'] || '';
-  if (cronSecret && auth === `Bearer ${cronSecret}`) return true;
-
-  return false;
-}
 
 const APPLE_SERVER_API_CONFIGURED = !!(
   process.env.APPLE_ISSUER_ID &&
@@ -35,10 +24,7 @@ module.exports = async (req, res) => {
   if (handleCorsPreflight(req, res)) return;
   if (req.method !== 'POST' && req.method !== 'GET') return res.status(405).end();
 
-  if (!isAuthorized(req)) {
-    // Reutiliza checkSecret para mantener el mensaje de error consistente con el resto de la API.
-    if (!checkSecret(req, res)) return;
-  }
+  if (!checkAdminSecret(req, res)) return;
 
   try {
     const activeSubs = await prisma.userEntitlement.findMany({

@@ -1,7 +1,10 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret, getOptionalUserId } = require('../../lib/auth');
+const { requireOwner } = require('../../lib/auth');
 const { getJsonBody } = require('../../lib/requestBody');
+const { checkWriteRateLimit } = require('../../lib/rateLimit');
+const { parseOrReject, deckRefPayload } = require('../../lib/validate');
+const { sendServerError } = require('../../lib/httpError');
 
 /**
  * POST|DELETE /api/alldecks/delete
@@ -12,31 +15,30 @@ module.exports = async (req, res) => {
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST' && req.method !== 'DELETE') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
 
-    let payload;
+    const auth = requireOwner(req, res);
+    if (!auth) return;
+    if (!(await checkWriteRateLimit(req, res, 'alldecks-delete'))) return;
+
+    let body;
     try {
-      payload = getJsonBody(req);
+      body = getJsonBody(req);
     } catch (error) {
       return res.status(400).json({ error: 'invalid_json', message: 'Request body must be valid JSON' });
     }
+    const payload = parseOrReject(res, deckRefPayload, body);
+    if (!payload) return;
 
-    const { userKey, id, deckName } = payload || {};
-    if (!userKey || (!id && !deckName)) {
-      return res.status(400).json({ error: 'userKey and id|deckName required' });
-    }
-
-    const jwtUserId = getOptionalUserId(req);
-    const owner = jwtUserId
-      ? { OR: [{ userKey }, { userId: jwtUserId }] }
-      : { userKey };
+    const { id, deckName } = payload;
+    const owner = auth.userId
+      ? { OR: [{ userKey: auth.userKey }, { userId: auth.userId }] }
+      : { userKey: auth.userKey };
     const result = await prisma.allDeck.deleteMany({
       where: id ? { id, ...owner } : { deckName, ...owner },
     });
 
     res.status(200).json({ ok: true, deleted: result.count });
   } catch (e) {
-    console.error('❌ /api/alldecks/delete', e);
-    res.status(500).json({ error: 'failed' });
+    sendServerError(res, '/api/alldecks/delete', e);
   }
 };

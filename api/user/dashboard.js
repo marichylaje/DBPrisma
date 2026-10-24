@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { requireUser } = require('../../lib/auth');
+const { sendServerError } = require('../../lib/httpError');
 const {
   refreshUserGamification,
   summarizeRounds,
@@ -138,8 +139,7 @@ module.exports = async (req, res) => {
       badges: Array.isArray(user.badgesJson) ? user.badgesJson : [],
     });
   } catch (e) {
-    console.error('❌ /api/user/dashboard error:', e);
-    res.status(500).json({ error: 'failed', details: e.message });
+    sendServerError(res, '/api/user/dashboard', e);
   }
 };
 

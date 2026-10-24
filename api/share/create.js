@@ -1,15 +1,20 @@
-﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
+const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireOwner } = require('../../lib/auth');
+const { getJsonBody } = require('../../lib/requestBody');
 const { checkRateLimitTiers } = require('../../lib/rateLimit');
-const { lookupNickname } = require('../../lib/userLookup');
+const { resolveOwnerRecord } = require('../../lib/userLookup');
+const { parseOrReject, sharedDeckPayload } = require('../../lib/validate');
+const { sendServerError } = require('../../lib/httpError');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
+
+    const auth = requireOwner(req, res);
+    if (!auth) return;
     // Evita spam de mazos públicos compartidos desde una misma IP.
     const tiersOk = await checkRateLimitTiers(req, res, 'share-create', [
       { id: 'burst', limit: 8, windowSeconds: 10 },
@@ -34,43 +39,40 @@ module.exports = async (req, res) => {
       console.error('❌ Failed reactive cleanup of shared decks:', cleanupError);
     }
 
+    let body;
+    try {
+      body = getJsonBody(req);
+    } catch (error) {
+      return res.status(400).json({ error: 'invalid_json', message: 'Request body must be valid JSON' });
+    }
+    const payload = parseOrReject(res, sharedDeckPayload, body);
+    if (!payload) return;
+
     const {
-      userKey = null,
       deckName,
       deckDescription = null,
-      commander = {},
+      commander,
       commanderName: cName,
       commanderId: cId,
-      partner = null,
+      partner,
       partnerName: pName,
       partnerId: pId,
-      cards = [],
-      sideboard = [],
-      sharedType = 'QR',
+      cards,
+      sideboard,
+      sharedType,
       tournamentId = null,
-    } = req.body || {};
+    } = payload;
 
     const finalCommanderName = commander?.name || cName;
     const finalCommanderId = commander?.id || cId;
     const finalPartnerName = partner?.name || pName;
     const finalPartnerId = partner?.id || pId;
 
-    if (!deckName) {
-      return res.status(400).json({ error: 'deckName is required' });
-    }
     if (!finalCommanderName) {
       return res.status(400).json({ error: 'commander name is required' });
     }
-    if (!Array.isArray(cards)) {
-      return res.status(400).json({ error: 'cards must be an array' });
-    }
-    if (!Array.isArray(sideboard)) {
-      return res.status(400).json({ error: 'sideboard must be an array' });
-    }
 
-    // Desnormalizado: si userKey resulta ser el id de un usuario registrado, guardamos su
-    // nickname para poder leerlo rápido al revisar la tabla manualmente (no afecta la lógica).
-    const nickname = await lookupNickname(userKey);
+    const { userKey, nickname } = await resolveOwnerRecord(auth);
 
     const created = await prisma.sharedDeck.create({
       data: {
@@ -91,8 +93,6 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, share: created });
   } catch (e) {
-    console.error('❌ /api/share/create', e);
-    res.status(500).json({ error: 'failed' });
+    sendServerError(res, '/api/share/create', e);
   }
 };
-

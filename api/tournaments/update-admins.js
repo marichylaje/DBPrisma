@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { requireUser } = require('../../lib/auth');
+const { sendServerError } = require('../../lib/httpError');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -41,8 +42,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, tournament: updated });
   } catch (e) {
-    console.error('❌ /api/tournaments/update-admins error:', e);
-    res.status(500).json({ error: 'Failed to update co-administrators', details: e.message });
+    sendServerError(res, '/api/tournaments/update-admins', e);
   }
 };
 

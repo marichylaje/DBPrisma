@@ -6,18 +6,18 @@
 // configurado, CORS roto, etc.) justo después de un deploy.
 //
 // Uso:
-//   BASE_URL=https://tu-dominio.vercel.app APP_BACKEND_SECRET=xxx node verify_iap_deploy.js
+//   BASE_URL=https://tu-dominio.vercel.app ADMIN_SECRET=xxx node verify_iap_deploy.js
 require('dotenv').config();
 
 const BASE_URL = process.env.BASE_URL;
-const SECRET = process.env.APP_BACKEND_SECRET;
+const SECRET = process.env.ADMIN_SECRET;
 
 if (!BASE_URL) {
   console.error('❌ Falta BASE_URL (ej: https://tu-dominio.vercel.app)');
   process.exit(1);
 }
 if (!SECRET) {
-  console.error('❌ Falta APP_BACKEND_SECRET');
+  console.error('❌ Falta ADMIN_SECRET');
   process.exit(1);
 }
 
@@ -41,21 +41,38 @@ function assert(cond, msg) {
 async function main() {
   console.log(`🔎 Verificando despliegue de IAP contra ${BASE_URL}`);
 
-  await check('GET /api/entitlement responde 200 con secret válido', async () => {
-    const res = await fetch(`${BASE_URL}/api/entitlement?userKey=verify_iap_deploy_smoke_test`, {
-      headers: { 'x-app-secret': SECRET },
+  let deviceToken = null;
+  await check('POST /api/auth-device emite una sesión de dispositivo', async () => {
+    const res = await fetch(`${BASE_URL}/api/auth-device`, { method: 'POST' });
+    assert(res.status === 201, `status esperado 201, recibido ${res.status}`);
+    const body = await res.json();
+    assert(typeof body.token === 'string' && body.token.length > 20, 'la respuesta debe incluir token');
+    deviceToken = body.token;
+  });
+
+  await check('GET /api/entitlement responde 200 con sesión válida', async () => {
+    const res = await fetch(`${BASE_URL}/api/entitlement`, {
+      headers: { Authorization: `Bearer ${deviceToken}` },
     });
     assert(res.status === 200, `status esperado 200, recibido ${res.status}`);
     const body = await res.json();
     assert(typeof body.active === 'boolean', 'la respuesta debe incluir "active" booleano');
   });
 
-  await check('GET /api/entitlement rechaza sin secret (401)', async () => {
-    const res = await fetch(`${BASE_URL}/api/entitlement?userKey=verify_iap_deploy_smoke_test`);
+  await check('GET /api/entitlement rechaza sin token (401)', async () => {
+    const res = await fetch(`${BASE_URL}/api/entitlement`);
     assert(res.status === 401, `status esperado 401, recibido ${res.status}`);
   });
 
-  await check('POST /api/admin/reconcile-subscriptions responde 200 con secret válido', async () => {
+  await check('POST /api/admin/reconcile-subscriptions rechaza un token de dispositivo (401)', async () => {
+    const res = await fetch(`${BASE_URL}/api/admin/reconcile-subscriptions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${deviceToken}` },
+    });
+    assert(res.status === 401, `status esperado 401, recibido ${res.status}`);
+  });
+
+  await check('POST /api/admin/reconcile-subscriptions responde 200 con ADMIN_SECRET', async () => {
     const res = await fetch(`${BASE_URL}/api/admin/reconcile-subscriptions`, {
       method: 'POST',
       headers: { 'x-app-secret': SECRET },

@@ -6,7 +6,7 @@ implementado en los Calls 1 y 2. Márcalo según avances.
 ## 1. Variables de entorno (Vercel > Project Settings > Environment Variables)
 
 Ya confirmadas en producción (Call 1):
-- [x] `APP_BACKEND_SECRET`
+- [ ] `APP_JWT_SECRET` (≥ 32 caracteres aleatorios) y `ADMIN_SECRET` — nuevos; `APP_BACKEND_SECRET` ya no se usa y debe eliminarse de Vercel y de GitHub Secrets
 - [x] `APPLE_SHARED_SECRET`
 - [x] `GOOGLE_SERVICE_ACCOUNT_JSON_BASE64`
 - [x] `GOOGLE_PACKAGE_NAME`

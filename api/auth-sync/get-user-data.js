@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { requireUser } = require('../../lib/auth');
+const { sendServerError } = require('../../lib/httpError');
 
 /**
  * GET /api/auth-sync/get-user-data
@@ -57,7 +58,7 @@ module.exports = async (req, res) => {
             updatedAt: true,
           },
         },
-        collection: {
+        collections: {
           select: {
             userKey: true,
             cards: true,
@@ -74,7 +75,6 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, user });
   } catch (e) {
-    console.error('❌ /api/auth-sync/get-user-data error:', e);
-    res.status(500).json({ error: 'failed', details: e.message });
+    sendServerError(res, '/api/auth-sync/get-user-data', e);
   }
 };

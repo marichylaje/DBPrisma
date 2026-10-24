@@ -14,4 +14,4 @@ jobs:
         run: |
           curl -X POST "https://db-prisma-rho.vercel.app/api/admin/refresh-prices" \
             -H "Content-Type: application/json" \
-            -H "x-app-secret: ${{ secrets.APP_BACKEND_SECRET }}"
+            -H "x-app-secret: ${{ secrets.ADMIN_SECRET }}"

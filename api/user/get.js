@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { requireUser } = require('../../lib/auth');
+const { sendServerError } = require('../../lib/httpError');
 const { getQueryParam } = require('../../lib/requestQuery');
 
 module.exports = async (req, res) => {
@@ -44,8 +45,7 @@ module.exports = async (req, res) => {
       user: user || null,
     });
   } catch (e) {
-    console.error('❌ /api/user/get error:', e);
-    res.status(500).json({ error: 'failed', details: e.message });
+    sendServerError(res, '/api/user/get', e);
   }
 };
 

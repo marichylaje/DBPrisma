@@ -2,31 +2,47 @@
 const { prisma } = require('../../lib/prisma');
 const { verifyAppleReceipt } = require('../../lib/iap-apple');
 const { verifyAndroidSub } = require('../../lib/iap-google');
-const { checkSecret } = require('../../lib/auth');
+const { requireOwner } = require('../../lib/auth');
 const { logIapEvent } = require('../../lib/iapLogger');
 const { checkRateLimitTiers } = require('../../lib/rateLimit');
-const { lookupNickname } = require('../../lib/userLookup');
+const { resolveOwnerRecord } = require('../../lib/userLookup');
+
+const MAX_FIELD_LENGTH = 20000;
+
+function isBoundedString(value) {
+  return typeof value === 'string' && value.length > 0 && value.length <= MAX_FIELD_LENGTH;
+}
 
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   if (req.method !== 'POST') return res.status(405).end();
-  if (!checkSecret(req, res)) return;
+  const auth = requireOwner(req, res);
+  if (!auth) return;
   // Evita fuzzing/spam de recibos de compra contra Apple/Google desde una misma IP.
   const tiersOk = await checkRateLimitTiers(req, res, 'iap-verify', [
     { id: 'burst', limit: 8, windowSeconds: 10 },
     { id: 'sustained', limit: 20, windowSeconds: 600 },
   ]);
   if (!tiersOk) return;
-  const userKey = String(req.query.userKey || '');
-  if (!userKey) return res.status(400).json({ error: 'userKey required' });
 
-  // Desnormalizado: si userKey resulta ser el id de un usuario registrado, guardamos su
-  // nickname para poder leerlo rápido al revisar la tabla manualmente (no afecta la lógica).
-  const nickname = await lookupNickname(userKey);
+  // El entitlement se asocia SOLO al dueño del token (el cliente no elige el userKey).
+  let userKey;
+  let nickname;
+  try {
+    ({ userKey, nickname } = await resolveOwnerRecord(auth));
+  } catch (e) {
+    return res.status(500).json({ error: 'verify failed' });
+  }
 
   try {
     const body = req.body || {};
+    if (body.platform === 'ios' && !isBoundedString(body.receipt)) {
+      return res.status(400).json({ error: 'receipt required' });
+    }
+    if (body.platform === 'android' && (!isBoundedString(body.purchaseToken) || !isBoundedString(body.productId))) {
+      return res.status(400).json({ error: 'productId and purchaseToken required' });
+    }
     if (body.platform === 'ios') {
       const r = await verifyAppleReceipt(body.receipt);
 
@@ -50,12 +66,13 @@ module.exports = async (req, res) => {
 
     if (body.platform === 'android') {
       const allowPending = process.env.ALLOW_PENDING_ANDROID_PREMIUM === 'true';
-      const disableVerify = process.env.DISABLE_ANDROID_VERIFY === 'true';
       // Tope de seguridad: aunque PENDING_DEFAULT_DAYS esté mal configurado (o sea muy alto),
       // nunca se concede más de MAX_PENDING_DAYS de acceso premium sin verificación real.
       const MAX_PENDING_DAYS = 30;
       const pendingDays = Math.min(Math.max(Number(process.env.PENDING_DEFAULT_DAYS) || 7, 1), MAX_PENDING_DAYS);
-      const isProduction = process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV === 'production';
+      const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+      // El bypass de verificación está BLOQUEADO en producción aunque la variable quede encendida.
+      const disableVerify = !isProduction && process.env.DISABLE_ANDROID_VERIFY === 'true';
 
       // Anti-replay: un mismo purchaseToken no puede quedar vinculado a dos cuentas.
       if (body.purchaseToken) {
@@ -106,7 +123,7 @@ module.exports = async (req, res) => {
     const msg = String((e && e.message) || e);
     logIapEvent({ level: 'error', source: 'unknown', event: 'verify_error', userKey, error: msg });
     if (msg.includes('_config_missing') || msg.includes('_config_invalid')) {
-      return res.status(503).json({ error: 'iap_config_error', details: msg });
+      return res.status(503).json({ error: 'iap_config_error' });
     }
     return res.status(500).json({ error: 'verify failed' });
   }

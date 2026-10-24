@@ -1,8 +1,11 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireOwner } = require('../../lib/auth');
 const { getJsonBody } = require('../../lib/requestBody');
-const { resolveOwner } = require('../../lib/userLookup');
+const { resolveOwnerRecord } = require('../../lib/userLookup');
+const { checkWriteRateLimit } = require('../../lib/rateLimit');
+const { parseOrReject, deckPayload } = require('../../lib/validate');
+const { sendServerError } = require('../../lib/httpError');
 
 const MIN_CARDS = 97;
 const MAX_CARDS = 103;
@@ -22,43 +25,41 @@ module.exports = async (req, res) => {
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
 
-    let payload;
+    const auth = requireOwner(req, res);
+    if (!auth) return;
+    if (!(await checkWriteRateLimit(req, res, 'alldecks-save'))) return;
+
+    let body;
     try {
-      payload = getJsonBody(req);
+      body = getJsonBody(req);
     } catch (error) {
       return res.status(400).json({ error: 'invalid_json', message: 'Request body must be valid JSON' });
     }
+    const payload = parseOrReject(res, deckPayload, body);
+    if (!payload) return;
 
     const {
-      userKey,
       deckName,
       deckDescription = null,
       instagram = null,
-      commander = {},
+      commander,
       commanderName: cName,
       commanderId: cId,
-      partner = null,
+      partner,
       partnerName: pName,
       partnerId: pId,
-      cards = [],
-      sideboard = [],
-    } = payload || {};
+      cards,
+      sideboard,
+    } = payload;
 
     const commanderName = commander?.name || cName;
     const commanderId = commander?.id || cId || null;
     const partnerName = partner?.name || pName || null;
     const partnerId = partner?.id || pId || null;
 
-    if (!userKey || !deckName) {
-      return res.status(400).json({ error: 'userKey and deckName are required' });
-    }
     if (!commanderName) {
       return res.status(400).json({ error: 'commander name is required' });
-    }
-    if (!Array.isArray(cards) || !Array.isArray(sideboard)) {
-      return res.status(400).json({ error: 'cards and sideboard must be arrays' });
     }
 
     const cardCount = sumCards(cards) + 1 + (partnerName ? 1 : 0);
@@ -68,10 +69,10 @@ module.exports = async (req, res) => {
         .json({ error: 'card_count_out_of_range', cardCount, min: MIN_CARDS, max: MAX_CARDS });
     }
 
-    const user = await resolveOwner(req, userKey);
+    const { userKey, userId, nickname } = await resolveOwnerRecord(auth);
     const data = {
-      nickname: user?.nickname ?? null,
-      userId: user?.id ?? null,
+      nickname,
+      userId,
       deckDescription,
       instagram,
       commanderName,
@@ -84,8 +85,8 @@ module.exports = async (req, res) => {
     };
 
     // Misma cuenta en varios dispositivos: un deck con el mismo nombre se actualiza en vez de duplicarse.
-    const existing = user
-      ? await prisma.allDeck.findFirst({ where: { userId: user.id, deckName } })
+    const existing = userId
+      ? await prisma.allDeck.findFirst({ where: { userId, deckName } })
       : null;
 
     const deck = existing
@@ -98,7 +99,6 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, deck });
   } catch (e) {
-    console.error('❌ /api/alldecks/save', e);
-    res.status(500).json({ error: 'failed' });
+    sendServerError(res, '/api/alldecks/save', e);
   }
 };

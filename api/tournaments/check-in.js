@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { requireUser } = require('../../lib/auth');
+const { sendServerError } = require('../../lib/httpError');
 const { getTournamentManageAccess } = require('../../lib/tournamentAuth');
 
 module.exports = async (req, res) => {
@@ -56,8 +57,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, participant: updated });
   } catch (e) {
-    console.error('❌ /api/tournaments/check-in error:', e);
-    res.status(500).json({ error: 'failed', details: e.message });
+    sendServerError(res, '/api/tournaments/check-in', e);
   }
 };
 

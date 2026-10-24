@@ -1,16 +1,29 @@
-﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
+const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../../lib/prisma');
-const { checkSecret } = require('../../../lib/auth');
 const { parseDeckKey } = require('../../../lib/deckDownloads');
+const { checkRateLimitTiers } = require('../../../lib/rateLimit');
+const { sendServerError } = require('../../../lib/httpError');
 
+const MAX_KEYS = 200;
+
+// Lectura pública de contadores (no expone datos de usuario); limitada en tamaño y por IP.
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
 
-    const deckKeys = Array.isArray(req.body?.deckKeys) ? req.body.deckKeys : [];
+    const rateOk = await checkRateLimitTiers(req, res, 'downloads-batch', [
+      { id: 'burst', limit: 10, windowSeconds: 10 },
+      { id: 'sustained', limit: 300, windowSeconds: 3600 },
+    ]);
+    if (!rateOk) return;
+
+    const rawKeys = Array.isArray(req.body?.deckKeys) ? req.body.deckKeys : [];
+    if (rawKeys.length > MAX_KEYS) {
+      return res.status(400).json({ error: `deckKeys max ${MAX_KEYS}` });
+    }
+    const deckKeys = rawKeys.filter((key) => typeof key === 'string' && key.length <= 200);
     const counts = {};
 
     if (!deckKeys.length) {
@@ -91,8 +104,6 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ counts });
   } catch (e) {
-    console.error('❌ /api/decks/downloads/batch', e);
-    res.status(500).json({ error: 'failed' });
+    sendServerError(res, '/api/decks/downloads/batch', e);
   }
 };
-

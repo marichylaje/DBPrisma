@@ -1,22 +1,19 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireOwner } = require('../../lib/auth');
+const { sendServerError } = require('../../lib/httpError');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'GET') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
 
-    const { userKey } = req.query || {};
-
-    if (!userKey) {
-      return res.status(400).json({ error: 'userKey is required' });
-    }
+    const auth = requireOwner(req, res);
+    if (!auth) return;
 
     const wishlist = await prisma.userWishlist.findUnique({
-      where: { userKey },
+      where: { userKey: auth.userKey },
     });
 
     res.status(200).json({
@@ -24,7 +21,6 @@ module.exports = async (req, res) => {
       cards: wishlist && Array.isArray(wishlist.cards) ? wishlist.cards : [],
     });
   } catch (e) {
-    console.error('❌ /api/wishlist/get', e);
-    res.status(500).json({ error: 'failed', details: e.message });
+    sendServerError(res, '/api/wishlist/get', e);
   }
 };

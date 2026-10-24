@@ -1,20 +1,22 @@
-﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
+const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireOwner } = require('../../lib/auth');
+const { sendServerError } = require('../../lib/httpError');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'GET') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
 
-    const userKey = String(req.query.userKey || '');
-    const id = req.query.id ? String(req.query.id) : null;
-    const deckName = req.query.deckName ? String(req.query.deckName) : null;
-    if (!userKey) return res.status(400).json({ error: 'userKey required' });
+    const auth = requireOwner(req, res);
+    if (!auth) return;
+
+    const id = typeof req.query.id === 'string' && req.query.id ? req.query.id : null;
+    const deckName = typeof req.query.deckName === 'string' && req.query.deckName ? req.query.deckName : null;
     if (!id && !deckName) return res.status(400).json({ error: 'id or deckName required' });
 
+    const { userKey } = auth;
     const deck = id
       ? await prisma.userDeck.findFirst({ where: { id, userKey } })
       : await prisma.userDeck.findUnique({ where: { userKey_deckName: { userKey, deckName } } });
@@ -33,8 +35,6 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ deck: responseDeck });
   } catch (e) {
-    console.error('❌ /api/decks/get', e);
-    res.status(500).json({ error: 'failed' });
+    sendServerError(res, '/api/decks/get', e);
   }
 };
-

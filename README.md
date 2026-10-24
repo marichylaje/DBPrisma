@@ -28,12 +28,22 @@ Cada archivo dentro de `api/` es un endpoint serverless independiente.
 Patrón común:
 1. `applyCors` + `handleCorsPreflight`
 2. validación de método HTTP
-3. autenticación por `x-app-secret` (excepto webhooks externos)
-4. lógica de negocio con Prisma
+3. autenticación por JWT (`requireOwner` para datos de usuario/dispositivo, `requireUser` para cuentas) o secreto de servidor (`checkAdminSecret`, solo `/api/admin/*`). Los webhooks externos se autentican criptográficamente.
+4. validación de entrada (`lib/validate.js`, zod) y rate limit (`lib/rateLimit.js`)
+5. lógica de negocio con Prisma. Los errores 500 se responden con `lib/httpError.js` (sin detalles internos)
+
+### Modelo de identidad
+- **Cuenta** (`kind: user`): `POST /api/auth-register` / `auth-login` emiten un JWT con `sub = User.id`.
+- **Dispositivo anónimo** (`kind: device`): `POST /api/auth-device` emite un JWT con un `userKey` generado por el servidor (`dev_<hex>`).
+- El dueño de los datos (`userKey`) sale **siempre del token**, nunca del body/query. Un token de dispositivo no sirve en rutas de cuenta.
+- Al iniciar sesión, `POST /api/auth-sync/migrate-user-data` traslada los datos anónimos a la cuenta usando el token de dispositivo como prueba de propiedad.
 
 ### Capa de negocio
 `lib/` concentra piezas compartidas:
-- `auth.js`: validación de `APP_BACKEND_SECRET`
+- `auth.js`: emisión/verificación de JWT (HS256, `iss`/`aud`) y `checkAdminSecret`
+- `validate.js`: esquemas zod y límites de tamaño
+- `password.js`: hash scrypt asíncrono
+- `httpError.js`: respuestas 500 genéricas
 - `cors.js`: reglas CORS
 - `prisma.js`: inicializa PrismaClient
 - módulos de IAP Apple/Google
@@ -55,8 +65,8 @@ Dominios principales:
 ### Requeridas base
 - `DATABASE_URL`
 - `DIRECT_DATABASE_URL`
-- `APP_BACKEND_SECRET`
-- `APP_JWT_SECRET`
+- `APP_JWT_SECRET` (≥ 32 caracteres aleatorios; el backend se niega a firmar con una clave más corta)
+- `ADMIN_SECRET` (solo server-to-server: `/api/admin/*`, GitHub Actions. **Nunca en la app**)
 
 ### CORS (DONE)
 - `APP_ALLOWED_ORIGINS` (lista separada por comas, ej: `https://app.midominio.com,https://admin.midominio.com`)
@@ -106,13 +116,15 @@ Otros comandos:
 ## Endpoints API
 
 Autenticación:
-- Endpoints de usuario/sesión exigen `Authorization: Bearer <jwt>`.
-- Endpoints admin/internos usan `x-app-secret: <APP_BACKEND_SECRET>`.
+- Endpoints de datos y de usuario exigen `Authorization: Bearer <JWT>` (sesión de cuenta o de dispositivo; ver "Modelo de identidad").
+- Endpoints admin/internos (`/api/admin/*`) usan `x-app-secret: <ADMIN_SECRET>` o `Authorization: Bearer <CRON_SECRET>` (Vercel Cron).
+- Públicos (con rate limit): `auth-register`, `auth-login`, `auth-device`, `alldecks/list`, `share/get`, `prices/history`, `tournaments/search`, `decks/downloads/batch`, `analytics/track`.
 - Excepciones:
   - `/api/iap/apple-webhook` (firma criptográfica Apple)
   - `/api/iap/google-webhook` (OIDC token de Pub/Sub)
 
 ### Auth y perfil
+- `POST /api/auth-device` (sesión anónima)
 - `POST /api/auth-register`
 - `POST /api/auth-login`
 - `GET /api/user/get`
@@ -120,7 +132,7 @@ Autenticación:
 - `GET /api/user/dashboard`
 - `GET /api/auth-sync/get-user-data`
 - `POST /api/auth-sync/migrate-user-data`
-
+- `POST /api/auth-delete` (JWT; borra la cuenta y sus datos, requerido por App Store 5.1.1(v))
 ### Entitlement, trial e IAP
 - `GET /api/entitlement`
 - `POST /api/trial/start`
@@ -262,10 +274,11 @@ Recomendado antes de publicar:
 
 ## Limitaciones conocidas
 
-- La autenticación actual es por secreto compartido entre cliente y backend (`x-app-secret`), sin JWT/sesión por usuario (excepto auth-login/auth-register que sí emiten JWT).
-- Rate limiting básico por IP implementado a nivel aplicación (`lib/rateLimit.js`, contador en Postgres) en auth-login, auth-register, iap/verify, trial/start y share/create. Recomendado complementar con reglas de Vercel WAF (edge, antes de invocar la función) — ver `IAP_PRODUCTION_CHECKLIST.md`.
+- Las sesiones son JWT sin refresh ni revocación: el token de cuenta dura 7 días y el de dispositivo 365 días. Si se compromete `APP_JWT_SECRET`, rotarlo invalida todas las sesiones.
+- Rate limiting por IP en `lib/rateLimit.js` (contador en Postgres); las rutas sensibles de auth/registro/sesión fallan en modo cerrado. Recomendado complementar con reglas de Vercel WAF — ver `IAP_PRODUCTION_CHECKLIST.md`.
 - Debes configurar `APP_ALLOWED_ORIGINS` explícitamente en producción.
-- Hay scripts de test desactualizados respecto al esquema actual (deben alinearse antes de usarlos como gate formal de release).
+- Tests de seguridad: `npm test` (stubs de Prisma, sin base de datos). Los scripts `test_*.js` de la raíz están desactualizados respecto al esquema actual y requieren una BD real.
+- `DISABLE_ANDROID_VERIFY` se ignora en producción (`VERCEL_ENV=production`).
 
 ## Licencia
 

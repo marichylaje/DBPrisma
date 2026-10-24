@@ -1,10 +1,14 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret, getOptionalUserId } = require('../../lib/auth');
+const { decodeVerifiedToken, parseBearerToken } = require('../../lib/auth');
 const { lookupNicknames } = require('../../lib/userLookup');
+const { checkRateLimitTiers } = require('../../lib/rateLimit');
+const { sendServerError } = require('../../lib/httpError');
 
 const DEFAULT_MIN_CARDS = 97;
 const DEFAULT_MAX_CARDS = 103;
+const MAX_LIMIT = 1000;
+const MAX_USER_KEYS = 100;
 
 function parseIntParam(value, fallback) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
@@ -13,24 +17,33 @@ function parseIntParam(value, fallback) {
 
 /**
  * GET /api/alldecks/list?minCards=97&maxCards=103&limit=
- * Devuelve únicamente los decks cuyo cardCount está dentro del rango (filtrado en la DB).
+ * Galería pública de mazos compartidos (no requiere sesión). Si la petición trae un token válido,
+ * `userKeys` también incluye los mazos de esa cuenta.
  */
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'GET') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
+
+    const rateOk = await checkRateLimitTiers(req, res, 'alldecks-list', [
+      { id: 'burst', limit: 10, windowSeconds: 10 },
+      { id: 'sustained', limit: 300, windowSeconds: 3600 },
+    ]);
+    if (!rateOk) return;
 
     const minCards = parseIntParam(req.query.minCards, DEFAULT_MIN_CARDS);
     const maxCards = parseIntParam(req.query.maxCards, DEFAULT_MAX_CARDS);
     const limit = parseIntParam(req.query.limit, 0);
+    const take = limit > 0 ? Math.min(limit, MAX_LIMIT) : MAX_LIMIT;
     const userKeys = String(req.query.userKeys || '')
       .split(',')
       .map((key) => key.trim())
-      .filter(Boolean);
+      .filter(Boolean)
+      .slice(0, MAX_USER_KEYS);
 
-    const jwtUserId = getOptionalUserId(req);
+    const caller = decodeVerifiedToken(parseBearerToken(req));
+    const callerUserId = caller && caller.kind === 'user' ? caller.sub : null;
 
     const decks = await prisma.allDeck.findMany({
       where: {
@@ -39,13 +52,13 @@ module.exports = async (req, res) => {
           ? {
               OR: [
                 { userKey: { in: userKeys } },
-                ...(jwtUserId ? [{ userId: jwtUserId }] : []),
+                ...(callerUserId ? [{ userId: callerUserId }] : []),
               ],
             }
           : {}),
       },
       orderBy: { updatedAt: 'desc' },
-      ...(limit > 0 ? { take: Math.min(limit, 1000) } : {}),
+      take,
     });
 
     // Decks sin nickname guardado (p. ej. usuario que se registró después de compartir).
@@ -70,7 +83,6 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ decks: responseDecks });
   } catch (e) {
-    console.error('❌ /api/alldecks/list', e);
-    res.status(500).json({ error: 'failed' });
+    sendServerError(res, '/api/alldecks/list', e);
   }
 };

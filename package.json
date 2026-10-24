@@ -12,7 +12,8 @@
     "vercel-build": "prisma generate",
     "migrate": "prisma migrate deploy",
     "studio": "prisma studio",
-    "socket": "node socket-server.js"
+    "socket": "node socket-server.js",
+    "test": "node --test tests/security.test.js"
   },
   "dependencies": {
     "@apple/app-store-server-library": "^3.1.0",
@@ -24,7 +25,8 @@
     "google-auth-library": "^11.0.2",
     "googleapis": "^159.0.0",
     "jsonwebtoken": "^9.0.3",
-    "socket.io": "^4.8.3"
+    "socket.io": "^4.8.3",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/express": "^5.0.3",

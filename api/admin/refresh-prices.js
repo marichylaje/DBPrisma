@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { checkAdminSecret } = require('../../lib/auth');
+const { sendServerError } = require('../../lib/httpError');
 
 const chunk = (arr, size) => {
   const out = [];
@@ -33,7 +34,7 @@ module.exports = async (req, res) => {
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
+    if (!checkAdminSecret(req, res)) return;
 
     // 1) Obtener todas las colecciones de usuarios
     const collections = await prisma.userCollection.findMany();
@@ -184,8 +185,7 @@ module.exports = async (req, res) => {
       message: `Precios actualizados exitosamente. Total registros insertados: ${updatedCount}`,
     });
   } catch (e) {
-    console.error('❌ /api/admin/refresh-prices', e);
-    res.status(500).json({ error: 'failed', details: e.message });
+    sendServerError(res, '/api/admin/refresh-prices', e);
   }
 };
 

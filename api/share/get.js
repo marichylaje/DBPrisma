@@ -1,16 +1,23 @@
-﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
+const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { checkRateLimitTiers } = require('../../lib/rateLimit');
+const { sendServerError } = require('../../lib/httpError');
 
+// Lectura pública por id (cuid no enumerable) para mazos compartidos por QR; expira a los 3 días.
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'GET') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
 
-    const id = req.query.id ? String(req.query.id) : null;
-    if (!id) {
+    const rateOk = await checkRateLimitTiers(req, res, 'share-get', [
+      { id: 'burst', limit: 10, windowSeconds: 10 },
+      { id: 'sustained', limit: 200, windowSeconds: 3600 },
+    ]);
+    if (!rateOk) return;
+
+    const id = typeof req.query.id === 'string' && req.query.id ? req.query.id : null;
+    if (!id || id.length > 64) {
       return res.status(400).json({ error: 'id required' });
     }
 
@@ -49,8 +56,6 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ share: responseShare });
   } catch (e) {
-    console.error('❌ /api/share/get', e);
-    res.status(500).json({ error: 'failed' });
+    sendServerError(res, '/api/share/get', e);
   }
 };
-

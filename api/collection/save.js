@@ -1,58 +1,52 @@
-﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
+const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { requireOwner } = require('../../lib/auth');
 const { getJsonBody } = require('../../lib/requestBody');
-const { resolveOwner } = require('../../lib/userLookup');
+const { resolveOwnerRecord } = require('../../lib/userLookup');
+const { checkWriteRateLimit } = require('../../lib/rateLimit');
+const { parseOrReject, collectionPayload } = require('../../lib/validate');
+const { sendServerError } = require('../../lib/httpError');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
 
-    let payload;
+    const auth = requireOwner(req, res);
+    if (!auth) return;
+    if (!(await checkWriteRateLimit(req, res, 'collection-save'))) return;
+
+    let body;
     try {
-      payload = getJsonBody(req);
+      body = getJsonBody(req);
     } catch (error) {
       return res.status(400).json({ error: 'invalid_json', message: 'Request body must be valid JSON' });
     }
+    const payload = parseOrReject(res, collectionPayload, body);
+    if (!payload) return;
 
-    const { userKey, cards } = payload || {};
-
-    if (!userKey) {
-      return res.status(400).json({ error: 'userKey is required' });
-    }
-    if (!Array.isArray(cards)) {
-      return res.status(400).json({ error: 'cards must be an array' });
-    }
-
-    // Desnormalizado: si userKey resulta ser el id de un usuario registrado, guardamos su
-    // nickname para poder leerlo rápido al revisar la tabla manualmente (no afecta la lógica).
-    const owner = await resolveOwner(req, userKey);
-    const nickname = owner?.nickname ?? null;
+    const { userKey, userId, nickname } = await resolveOwnerRecord(auth);
     // Vincular la colección con la cuenta permite que los amigos puedan consultarla.
-    const ownerData = owner ? { userId: owner.id } : {};
+    const ownerData = userId ? { userId } : {};
 
     const upserted = await prisma.userCollection.upsert({
       where: { userKey },
       create: {
         userKey,
         nickname,
-        cards,
+        cards: payload.cards,
         ...ownerData,
       },
       update: {
         nickname,
-        cards,
+        cards: payload.cards,
         ...ownerData,
       },
     });
 
     res.status(200).json({ ok: true, collection: upserted });
   } catch (e) {
-    console.error('❌ /api/collection/save', e);
-    res.status(500).json({ error: 'failed', details: e.message });
+    sendServerError(res, '/api/collection/save', e);
   }
 };
-

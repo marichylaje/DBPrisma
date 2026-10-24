@@ -4,17 +4,28 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 
 const app = express();
-app.use(cors());
+
+// Los clientes nativos no envían Origin, así que no les afecta; solo se permiten los orígenes web declarados.
+const allowedOrigins = (process.env.APP_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+const corsOrigin = allowedOrigins.length ? allowedOrigins : false;
+app.use(cors({ origin: corsOrigin }));
 
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: '*',
+    origin: corsOrigin,
     methods: ['GET', 'POST'],
   },
+  maxHttpBufferSize: 200 * 1024, // un estado de partida pesa pocos KB
   pingTimeout: 30000, // 30s timeout for detecting connection drops
   pingInterval: 15000,
 });
+
+const MAX_ACTIVE_ROOMS = 2000;
+const ROOM_CODE_PATTERN = /^[A-Z0-9_-]{3,16}$/;
 
 // In-memory state database
 const activeRooms = {};
@@ -82,10 +93,15 @@ io.on('connection', (socket) => {
   // Join or create room
   socket.on('join_room', ({ roomCode, initialState, isHost = false }) => {
     const normalizedRoomCode = normalizeRoomCode(roomCode);
-    if (!normalizedRoomCode) return;
+    if (!normalizedRoomCode || !ROOM_CODE_PATTERN.test(normalizedRoomCode)) return;
 
     const isHostRequest = Boolean(isHost || initialState?.isHost || hasHostStatePayload(initialState));
     const existingRoomState = activeRooms[normalizedRoomCode];
+
+    if (!existingRoomState && Object.keys(activeRooms).length >= MAX_ACTIVE_ROOMS) {
+      socket.emit('error_message', { message: 'Servidor ocupado, intenta de nuevo más tarde.' });
+      return;
+    }
 
     // Guests cannot create new rooms; room must exist and have a started game.
     if (!existingRoomState && !isHostRequest) {
@@ -153,8 +169,9 @@ io.on('connection', (socket) => {
   // Synchronize game state
   socket.on('sync_state', ({ roomCode, state }) => {
     const normalizedRoomCode = normalizeRoomCode(roomCode);
-    if (!normalizedRoomCode || !state) return;
-    
+    if (!normalizedRoomCode || !state || typeof state !== 'object') return;
+    // Solo quien se unió a la sala puede modificar su estado.
+    if (!socket.rooms.has(normalizedRoomCode)) return;
     console.log(`Received state sync from ${socket.id} for room ${normalizedRoomCode}:`, Object.keys(state));
 
     // Merge changes into memory

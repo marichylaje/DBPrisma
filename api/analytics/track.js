@@ -1,9 +1,12 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
-const { checkSecret } = require('../../lib/auth');
+const { decodeVerifiedToken, parseBearerToken } = require('../../lib/auth');
 const { lookupNicknames } = require('../../lib/userLookup');
+const { checkRateLimitTiers } = require('../../lib/rateLimit');
+const { sendServerError } = require('../../lib/httpError');
 
 const MAX_BATCH_SIZE = 100;
+const MAX_PROPERTIES_BYTES = 4000;
 
 function truncate(value, maxLength = 255) {
   if (typeof value !== 'string') return null;
@@ -16,7 +19,8 @@ function normalizeProperties(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return {};
   }
-  return value;
+  // Evita que un cliente almacene JSON arbitrariamente grande.
+  return JSON.stringify(value).length > MAX_PROPERTIES_BYTES ? {} : value;
 }
 
 function sanitizeEvent(rawEvent) {
@@ -65,15 +69,26 @@ module.exports = async (req, res) => {
   if (handleCorsPreflight(req, res)) return;
   try {
     if (req.method !== 'POST') return res.status(405).end();
-    if (!checkSecret(req, res)) return;
+
+    const rateOk = await checkRateLimitTiers(req, res, 'analytics-track', [
+      { id: 'burst', limit: 10, windowSeconds: 10 },
+      { id: 'sustained', limit: 600, windowSeconds: 3600 },
+    ]);
+    if (!rateOk) return;
 
     const { events } = req.body || {};
     if (!Array.isArray(events)) {
       return res.status(400).json({ error: 'events must be an array' });
     }
 
+    // Si hay sesión válida, el userKey sale del token (no se puede suplantar a otro usuario).
+    const caller = decodeVerifiedToken(parseBearerToken(req));
+
     const batch = events.slice(0, MAX_BATCH_SIZE);
-    const sanitizedEvents = batch.map(sanitizeEvent).filter(Boolean);
+    const sanitizedEvents = batch
+      .map(sanitizeEvent)
+      .filter(Boolean)
+      .map((e) => (caller ? { ...e, userKey: caller.sub } : e));
 
     if (sanitizedEvents.length === 0) {
       return res.status(200).json({
@@ -101,8 +116,7 @@ module.exports = async (req, res) => {
       ok: true,
     });
   } catch (e) {
-    console.error('❌ /api/analytics/track', e);
-    return res.status(500).json({ error: 'failed', details: e.message });
+    return sendServerError(res, '/api/analytics/track', e);
   }
 };
 

@@ -1,6 +1,7 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { requireUser } = require('../../lib/auth');
+const { sendServerError } = require('../../lib/httpError');
 
 function generateFriendNightId() {
   let token = '';
@@ -138,7 +139,6 @@ module.exports = async (req, res) => {
       invitedCount: result.invitedCount,
     });
   } catch (e) {
-    console.error('Friend Night create error:', e);
-    return res.status(500).json({ error: 'failed', details: e.message });
+    return sendServerError(res, '/api/friend-nights/create', e);
   }
 };

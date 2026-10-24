@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { requireUser } = require('../../lib/auth');
+const { sendServerError } = require('../../lib/httpError');
 const { getTournamentManageAccess } = require('../../lib/tournamentAuth');
 
 module.exports = async (req, res) => {
@@ -293,8 +294,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({ ok: true, round: nextRound, matches: createdMatches });
   } catch (e) {
-    console.error('❌ /api/tournaments/generate-round error:', e);
-    res.status(500).json({ error: 'failed', details: e.message });
+    sendServerError(res, '/api/tournaments/generate-round', e);
   }
 };
 

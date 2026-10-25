@@ -1,9 +1,11 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { requireOwner } = require('../../lib/auth');
+const { lookupNicknames } = require('../../lib/userLookup');
 const { sendServerError } = require('../../lib/httpError');
 
 const MAX_DECKS = 500;
+const MAX_PUBLIC_DECKS = 1000;
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -14,17 +16,43 @@ module.exports = async (req, res) => {
     const auth = requireOwner(req, res);
     if (!auth) return;
 
-    // Solo los mazos del dueño del token; el userKey del cliente no se usa.
+    const hasUserKeyQuery =
+      typeof req.query.userKey === 'string' && req.query.userKey.trim().length > 0;
+
+    const where = hasUserKeyQuery
+      ? { userKey: auth.userKey }
+      : { commanderName: { not: null } };
+
     const decks = await prisma.userDeck.findMany({
-      where: { userKey: auth.userKey },
+      where,
       orderBy: { updatedAt: 'desc' },
-      take: MAX_DECKS,
+      take: hasUserKeyQuery ? MAX_DECKS : MAX_PUBLIC_DECKS,
     });
+
+    const missing = decks
+      .filter((deck) => !deck.nickname)
+      .map((deck) => deck.userId || deck.userKey);
+    const nicknames = await lookupNicknames(missing);
 
     const responseDecks = decks.map((deck) => ({
       ...deck,
+      nickname:
+        deck.nickname ?? nicknames.get(deck.userId || deck.userKey) ?? null,
       downloadCount: Number(deck.downloadCount ?? 0),
       sideboard: Array.isArray(deck.sideboard) ? deck.sideboard : [],
+      deckData:
+        deck.deckData && typeof deck.deckData === 'object'
+          ? deck.deckData
+          : {
+              cards: deck.cards,
+              commander: deck.commanderName
+                ? { name: deck.commanderName, id: deck.commanderId }
+                : null,
+              partner: deck.partnerName
+                ? { name: deck.partnerName, id: deck.partnerId }
+                : null,
+              sideboard: Array.isArray(deck.sideboard) ? deck.sideboard : [],
+            },
       commander: deck.commanderName
         ? { name: deck.commanderName, id: deck.commanderId }
         : null,

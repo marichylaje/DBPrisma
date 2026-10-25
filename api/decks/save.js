@@ -39,6 +39,7 @@ module.exports = async (req, res) => {
       partnerId: pId,
       cards,
       sideboard,
+      deckData,
       deckId = null,
       oldDeckName = null,
     } = payload;
@@ -48,13 +49,23 @@ module.exports = async (req, res) => {
     const finalPartnerName = partner?.name || pName || null;
     const finalPartnerId = partner?.id || pId || null;
 
-    if (!finalCommanderName) {
-      return res.status(400).json({ error: 'commander name is required' });
-    }
-
     // El dueño sale del JWT; nunca del body.
     const owner = await resolveOwnerRecord(auth);
     const { userKey, userId, nickname } = owner;
+    const normalizedSideboard = Array.isArray(sideboard) ? sideboard : [];
+    const deckDataPayload =
+      deckData && typeof deckData === 'object'
+        ? deckData
+        : {
+            cards,
+            commander: finalCommanderName
+              ? { id: finalCommanderId, name: finalCommanderName }
+              : null,
+            partner: finalPartnerName
+              ? { id: finalPartnerId, name: finalPartnerName }
+              : null,
+            sideboard: normalizedSideboard,
+          };
 
     const data = {
       nickname,
@@ -62,12 +73,13 @@ module.exports = async (req, res) => {
       deckName,
       deckDescription,
       instagram,
-      commanderName: finalCommanderName,
+      commanderName: finalCommanderName || null,
       commanderId: finalCommanderId,
       partnerName: finalPartnerName,
       partnerId: finalPartnerId,
       cards,
-      sideboard,
+      sideboard: normalizedSideboard,
+      deckData: deckDataPayload,
     };
 
     // Modo A: actualizar por id, solo si el deck pertenece al dueño autenticado.

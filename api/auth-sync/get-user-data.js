@@ -1,7 +1,7 @@
-﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
-const { prisma } = require('../../lib/prisma');
-const { requireUser } = require('../../lib/auth');
-const { sendServerError } = require('../../lib/httpError');
+﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + "/lib/cors");
+const { prisma } = require("../../lib/prisma");
+const { requireUser } = require("../../lib/auth");
+const { sendServerError } = require("../../lib/httpError");
 
 /**
  * GET /api/auth-sync/get-user-data
@@ -12,7 +12,7 @@ module.exports = async (req, res) => {
   if (handleCorsPreflight(req, res)) return;
 
   try {
-    if (req.method !== 'GET') return res.status(405).end();
+    if (req.method !== "GET") return res.status(405).end();
 
     const auth = requireUser(req, res);
     if (!auth) return;
@@ -20,11 +20,11 @@ module.exports = async (req, res) => {
     const { userId } = req.query;
 
     if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
+      return res.status(400).json({ error: "userId is required" });
     }
 
     if (userId !== auth.userId) {
-      return res.status(403).json({ error: 'forbidden' });
+      return res.status(403).json({ error: "forbidden" });
     }
 
     // Get user with all related data
@@ -53,6 +53,7 @@ module.exports = async (req, res) => {
             partnerId: true,
             cards: true,
             sideboard: true,
+            deckData: true,
             downloadCount: true,
             createdAt: true,
             updatedAt: true,
@@ -70,11 +71,11 @@ module.exports = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(404).json({ error: 'user_not_found' });
+      return res.status(404).json({ error: "user_not_found" });
     }
 
     res.status(200).json({ ok: true, user });
   } catch (e) {
-    sendServerError(res, '/api/auth-sync/get-user-data', e);
+    sendServerError(res, "/api/auth-sync/get-user-data", e);
   }
 };

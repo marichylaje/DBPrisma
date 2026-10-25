@@ -120,12 +120,13 @@ model UserDeck {
   deckName        String
   deckDescription String?  @db.Text
   instagram       String?
-  commanderName   String
+  commanderName   String?
   commanderId     String?
   partnerName     String?
   partnerId       String?
   cards           Json
   sideboard       Json     @default("[]")
+  deckData        Json?
   downloadCount   Int      @default(0)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -173,11 +174,11 @@ model DeckDownload {
 }
 
 model SharedDeck {
-  id              String   @id @default(cuid())
+  id              String  @id @default(cuid())
   nickname        String? // desnormalizado desde User.nickname (solo lectura rápida; puede ser null para usuarios anónimos)
   userKey         String?
   deckName        String
-  deckDescription String?  @db.Text
+  deckDescription String? @db.Text
 
   commanderName String
   commanderId   String?
@@ -197,21 +198,22 @@ model SharedDeck {
 }
 
 model User {
-  decks                    UserDeck[]
-  allDecks                 AllDeck[]
-  collections              UserCollection[]
-  wishlists                UserWishlist[]
-  friendRequestsSent       Friendship[]            @relation("FriendRequester")
-  friendRequestsReceived   Friendship[]            @relation("FriendAddressee")
-  friendNightEventsCreated FriendNightEvent[]
-  friendNightPlayerEntries FriendNightPlayer[]
-  friendNightInvitesReceived FriendNightInvite[]   @relation("FriendNightInvited")
-  friendNightInvitesSent   FriendNightInvite[]     @relation("FriendNightInviter")
-  id                       String                  @id
-  nickname                 String
-  email                    String?                 @unique
-  passwordHash             String?
-  role                     String
+  decks                      UserDeck[]
+  cloudDecks                 CloudDeck[]
+  allDecks                   AllDeck[]
+  collections                UserCollection[]
+  wishlists                  UserWishlist[]
+  friendRequestsSent         Friendship[]        @relation("FriendRequester")
+  friendRequestsReceived     Friendship[]        @relation("FriendAddressee")
+  friendNightEventsCreated   FriendNightEvent[]
+  friendNightPlayerEntries   FriendNightPlayer[]
+  friendNightInvitesReceived FriendNightInvite[] @relation("FriendNightInvited")
+  friendNightInvitesSent     FriendNightInvite[] @relation("FriendNightInviter")
+  id                         String              @id
+  nickname                   String
+  email                      String?             @unique
+  passwordHash               String?
+  role                       String
 
   xp    Int @default(0)
   level Int @default(1)
@@ -232,6 +234,34 @@ model User {
 
   // Índice trigram (pg_trgm): acelera los ILIKE / equals insensitive de login, registro y búsqueda de amigos.
   @@index([nickname(ops: raw("gin_trgm_ops"))], type: Gin)
+}
+
+// Mazos que el usuario publica manualmente desde MyDecks -> Export -> DeckBuilder.
+// Se listan en ImportDeck -> User Decks y soportan metadata social del formulario.
+model CloudDeck {
+  id              String   @id @default(cuid())
+  nickname        String?
+  userKey         String
+  userId          String?
+  user            User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deckName        String
+  deckDescription String?  @db.Text
+  instagram       String?
+  commanderName   String
+  commanderId     String?
+  partnerName     String?
+  partnerId       String?
+  cards           Json
+  sideboard       Json     @default("[]")
+  downloadCount   Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userKey, deckName])
+  @@index([userKey])
+  @@index([userId])
+  @@index([updatedAt])
+  @@map("CloudDecks")
 }
 
 model Friendship {
@@ -294,11 +324,11 @@ model FriendNightInvite {
 }
 
 model Tournament {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   title       String
-  description String?  @db.Text
+  description String? @db.Text
   format      String
-  status      String   @default("created")
+  status      String  @default("created")
   powerLevel  String
 
   locationName String
@@ -407,7 +437,7 @@ model TournamentMatch {
   players Json
   results Json?
 
-  status      String  @default("pending")
+  status     String  @default("pending")
   reportedBy String?
 
   createdAt DateTime @default(now())

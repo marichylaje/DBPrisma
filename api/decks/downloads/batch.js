@@ -1,8 +1,8 @@
-const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
-const { prisma } = require('../../../lib/prisma');
-const { parseDeckKey } = require('../../../lib/deckDownloads');
-const { checkRateLimitTiers } = require('../../../lib/rateLimit');
-const { sendServerError } = require('../../../lib/httpError');
+const { applyCors, handleCorsPreflight } = require(process.cwd() + "/lib/cors");
+const { prisma } = require("../../../lib/prisma");
+const { parseDeckKey } = require("../../../lib/deckDownloads");
+const { checkRateLimitTiers } = require("../../../lib/rateLimit");
+const { sendServerError } = require("../../../lib/httpError");
 
 const MAX_KEYS = 200;
 
@@ -11,11 +11,11 @@ module.exports = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   try {
-    if (req.method !== 'POST') return res.status(405).end();
+    if (req.method !== "POST") return res.status(405).end();
 
-    const rateOk = await checkRateLimitTiers(req, res, 'downloads-batch', [
-      { id: 'burst', limit: 10, windowSeconds: 10 },
-      { id: 'sustained', limit: 300, windowSeconds: 3600 },
+    const rateOk = await checkRateLimitTiers(req, res, "downloads-batch", [
+      { id: "burst", limit: 10, windowSeconds: 10 },
+      { id: "sustained", limit: 300, windowSeconds: 3600 },
     ]);
     if (!rateOk) return;
 
@@ -23,7 +23,9 @@ module.exports = async (req, res) => {
     if (rawKeys.length > MAX_KEYS) {
       return res.status(400).json({ error: `deckKeys max ${MAX_KEYS}` });
     }
-    const deckKeys = rawKeys.filter((key) => typeof key === 'string' && key.length <= 200);
+    const deckKeys = rawKeys.filter(
+      (key) => typeof key === "string" && key.length <= 200,
+    );
     const counts = {};
 
     if (!deckKeys.length) {
@@ -41,9 +43,9 @@ module.exports = async (req, res) => {
         continue;
       }
 
-      if (parsed.type === 'cloud') {
+      if (parsed.type === "cloud") {
         cloudIds.push(parsed.id);
-      } else if (parsed.type === 'alldeck') {
+      } else if (parsed.type === "alldeck") {
         allDeckIds.push(parsed.id);
       } else {
         nonCloudKeys.push(parsed.deckKey);
@@ -64,7 +66,7 @@ module.exports = async (req, res) => {
 
     const cloudCounts = new Map();
     if (cloudIds.length) {
-      const deckRows = await prisma.userDeck.findMany({
+      const deckRows = await prisma.cloudDeck.findMany({
         where: { id: { in: cloudIds } },
         select: { id: true, downloadCount: true },
       });
@@ -93,9 +95,9 @@ module.exports = async (req, res) => {
         continue;
       }
 
-      if (parsed.type === 'cloud') {
+      if (parsed.type === "cloud") {
         counts[key] = cloudCounts.get(parsed.id) ?? 0;
-      } else if (parsed.type === 'alldeck') {
+      } else if (parsed.type === "alldeck") {
         counts[key] = allDeckCounts.get(parsed.id) ?? 0;
       } else {
         counts[key] = deckDownloadCounts.get(parsed.deckKey) ?? 0;
@@ -104,6 +106,6 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ counts });
   } catch (e) {
-    sendServerError(res, '/api/decks/downloads/batch', e);
+    sendServerError(res, "/api/decks/downloads/batch", e);
   }
 };

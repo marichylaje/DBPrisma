@@ -27,7 +27,22 @@ module.exports = async (req, res) => {
     const responseDeck = {
       ...deck,
       sideboard: Array.isArray(deck.sideboard) ? deck.sideboard : [],
-      commander: { name: deck.commanderName, id: deck.commanderId },
+      deckData:
+        deck.deckData && typeof deck.deckData === 'object'
+          ? deck.deckData
+          : {
+              cards: deck.cards,
+              commander: deck.commanderName
+                ? { name: deck.commanderName, id: deck.commanderId }
+                : null,
+              partner: deck.partnerName
+                ? { name: deck.partnerName, id: deck.partnerId }
+                : null,
+              sideboard: Array.isArray(deck.sideboard) ? deck.sideboard : [],
+            },
+      commander: deck.commanderName
+        ? { name: deck.commanderName, id: deck.commanderId }
+        : null,
       partner: deck.partnerName
         ? { name: deck.partnerName, id: deck.partnerId }
         : null,

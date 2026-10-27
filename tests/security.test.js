@@ -243,11 +243,100 @@ test('el bypass DISABLE_ANDROID_VERIFY no concede premium en producción', async
   // Sin el bypass se intenta verificar contra Google; sin credenciales falla y NO se concede acceso.
   const res = await run('api/iap/verify.js', {
     method: 'POST', headers: bearer(deviceA),
-    body: { platform: 'android', productId: 'premium', purchaseToken: 'token-falso' },
+    body: { platform: 'android', productId: 'premium_support_5', purchaseToken: 'token-falso' },
   });
   delete process.env.VERCEL_ENV;
   delete process.env.DISABLE_ANDROID_VERIFY;
   delete process.env.ALLOW_PENDING_ANDROID_PREMIUM;
   assert.notEqual(res.statusCode, 200);
   assert.equal(upserted, false);
+});
+
+test('iap/verify: Android SKU válida pasa allowlist', async () => {
+  process.env.DISABLE_ANDROID_VERIFY = 'true';
+  process.env.ALLOW_PENDING_ANDROID_PREMIUM = 'true';
+  let upsertArgs = null;
+  overrides.set('userEntitlement.upsert', (args) => { upsertArgs = args; return {}; });
+
+  const res = await run('api/iap/verify.js', {
+    method: 'POST',
+    headers: bearer(deviceA),
+    body: { platform: 'android', productId: 'premium_support_8', purchaseToken: 'token-valido-test' },
+  });
+
+  delete process.env.DISABLE_ANDROID_VERIFY;
+  delete process.env.ALLOW_PENDING_ANDROID_PREMIUM;
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.pending, true);
+  assert.equal(upsertArgs.create.subProductId, 'premium_support_8');
+});
+
+test('iap/verify: Android SKU inválida se rechaza con 400 invalid_product_id', async () => {
+  process.env.DISABLE_ANDROID_VERIFY = 'true';
+  process.env.ALLOW_PENDING_ANDROID_PREMIUM = 'true';
+  let upserted = false;
+  overrides.set('userEntitlement.upsert', () => { upserted = true; return {}; });
+
+  const res = await run('api/iap/verify.js', {
+    method: 'POST',
+    headers: bearer(deviceA),
+    body: { platform: 'android', productId: 'premium_support_fake', purchaseToken: 'token-falso-test' },
+  });
+
+  delete process.env.DISABLE_ANDROID_VERIFY;
+  delete process.env.ALLOW_PENDING_ANDROID_PREMIUM;
+
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(res.body, { error: 'invalid_product_id' });
+  assert.equal(upserted, false);
+});
+
+test('iap/verify: iOS productId fuera de allowlist no activa premium', async () => {
+  const verifyPath = path.join(root, 'api/iap/verify.js');
+  const verifyKey = require.resolve(verifyPath);
+  const appleModuleKey = require.resolve(path.join(root, 'lib/iap-apple.js'));
+  const oldVerifyModule = require.cache[verifyKey];
+  const oldAppleModule = require.cache[appleModuleKey];
+
+  delete require.cache[verifyKey];
+  require.cache[appleModuleKey] = {
+    id: appleModuleKey,
+    filename: appleModuleKey,
+    loaded: true,
+    exports: {
+      verifyAppleReceipt: async () => ({
+        active: true,
+        expiryMs: Date.now() + 60_000,
+        productId: 'premium.support.999',
+        originalTransactionId: 'otx-test-allowlist',
+      }),
+    },
+    children: [],
+    paths: [],
+  };
+
+  let upsertArgs = null;
+  overrides.set('userEntitlement.upsert', (args) => { upsertArgs = args; return {}; });
+
+  const res = mockRes();
+  try {
+    const handler = require(verifyPath);
+    await handler({
+      method: 'POST',
+      headers: bearer(deviceA),
+      body: { platform: 'ios', receipt: 'dummy-receipt-base64' },
+      socket: {},
+    }, res);
+  } finally {
+    if (oldVerifyModule) require.cache[verifyKey] = oldVerifyModule;
+    else delete require.cache[verifyKey];
+    if (oldAppleModule) require.cache[appleModuleKey] = oldAppleModule;
+    else delete require.cache[appleModuleKey];
+  }
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { active: false, expiryMs: null, pending: false });
+  assert.equal(upsertArgs.create.subActive, false);
+  assert.equal(upsertArgs.create.subProductId, 'premium.support.999');
 });

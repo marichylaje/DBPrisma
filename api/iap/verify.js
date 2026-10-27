@@ -8,12 +8,46 @@ const { checkRateLimitTiers } = require('../../lib/rateLimit');
 const { resolveOwnerRecord } = require('../../lib/userLookup');
 
 const MAX_FIELD_LENGTH = 20000;
+const IOS_ALLOWED_PRODUCT_IDS = new Set([
+  'premium.support.5',
+  'premium.support.8',
+  'premium.support.12',
+  'premium.support.15',
+  'premium.support.20',
+]);
+const ANDROID_ALLOWED_PRODUCT_IDS = new Set([
+  'premium_support_5',
+  'premium_support_8',
+  'premium_support_12',
+  'premium_support_15',
+  'premium_support_20',
+]);
 
 function isBoundedString(value) {
   return typeof value === 'string' && value.length > 0 && value.length <= MAX_FIELD_LENGTH;
 }
 
-module.exports = async (req, res) => {
+function isAllowedProductId(platform, productId) {
+  if (platform === 'ios') return IOS_ALLOWED_PRODUCT_IDS.has(productId);
+  if (platform === 'android') return ANDROID_ALLOWED_PRODUCT_IDS.has(productId);
+  return false;
+}
+
+function normalizeIosVerificationResult(verificationResult) {
+  const hasInvalidProduct = isBoundedString(verificationResult.productId)
+    && !isAllowedProductId('ios', verificationResult.productId);
+
+  if (!hasInvalidProduct) {
+    return { result: verificationResult, hasInvalidProduct: false };
+  }
+
+  return {
+    result: { ...verificationResult, active: false, expiryMs: null },
+    hasInvalidProduct: true,
+  };
+}
+
+const handler = async (req, res) => {
   applyCors(req, res);
   if (handleCorsPreflight(req, res)) return;
   if (req.method !== 'POST') return res.status(405).end();
@@ -45,26 +79,35 @@ module.exports = async (req, res) => {
     }
     if (body.platform === 'ios') {
       const r = await verifyAppleReceipt(body.receipt);
+      const { result: verifiedResult, hasInvalidProduct } = normalizeIosVerificationResult(r);
+
+      if (hasInvalidProduct) {
+        logIapEvent({ level: 'warn', source: 'apple', event: 'verify_invalid_product_id', userKey, productId: r.productId });
+      }
 
       // Anti-replay: un mismo original_transaction_id no puede quedar vinculado a dos cuentas.
-      if (r.originalTransactionId) {
-        const existing = await prisma.userEntitlement.findUnique({ where: { appleOriginalTransactionId: r.originalTransactionId } });
+      if (verifiedResult.originalTransactionId) {
+        const existing = await prisma.userEntitlement.findUnique({ where: { appleOriginalTransactionId: verifiedResult.originalTransactionId } });
         if (existing && existing.userKey !== userKey) {
-          logIapEvent({ level: 'warn', source: 'apple', event: 'verify_conflict', userKey, otherUserKey: existing.userKey, originalTransactionId: r.originalTransactionId });
+          logIapEvent({ level: 'warn', source: 'apple', event: 'verify_conflict', userKey, otherUserKey: existing.userKey, originalTransactionId: verifiedResult.originalTransactionId });
           return res.status(409).json({ error: 'receipt_already_linked_to_another_account' });
         }
       }
 
       await prisma.userEntitlement.upsert({
         where: { userKey },
-        create: { userKey, nickname, subActive:r.active, subPlatform:'ios', subProductId:r.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, appleOriginalTransactionId: r.originalTransactionId || null },
-        update: {           nickname, subActive:r.active, subPlatform:'ios', subProductId:r.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, appleOriginalTransactionId: r.originalTransactionId || null },
+        create: { userKey, nickname, subActive:verifiedResult.active, subPlatform:'ios', subProductId:verifiedResult.productId, subExpiry: verifiedResult.expiryMs? new Date(verifiedResult.expiryMs): null, appleOriginalTransactionId: verifiedResult.originalTransactionId || null },
+        update: {           nickname, subActive:verifiedResult.active, subPlatform:'ios', subProductId:verifiedResult.productId, subExpiry: verifiedResult.expiryMs? new Date(verifiedResult.expiryMs): null, appleOriginalTransactionId: verifiedResult.originalTransactionId || null },
       });
-      logIapEvent({ source: 'apple', event: 'verify_ok', userKey, active: r.active, productId: r.productId });
-      return res.json({ active:r.active, expiryMs:r.expiryMs ?? null, pending:false });
+      logIapEvent({ source: 'apple', event: 'verify_ok', userKey, active: verifiedResult.active, productId: verifiedResult.productId });
+      return res.json({ active:verifiedResult.active, expiryMs:verifiedResult.expiryMs ?? null, pending:false });
     }
 
     if (body.platform === 'android') {
+      if (!isAllowedProductId('android', body.productId)) {
+        return res.status(400).json({ error: 'invalid_product_id' });
+      }
+
       const allowPending = process.env.ALLOW_PENDING_ANDROID_PREMIUM === 'true';
       // Tope de seguridad: aunque PENDING_DEFAULT_DAYS esté mal configurado (o sea muy alto),
       // nunca se concede más de MAX_PENDING_DAYS de acceso premium sin verificación real.
@@ -111,8 +154,8 @@ module.exports = async (req, res) => {
       const r = await verifyAndroidSub(body.productId, body.purchaseToken);
       await prisma.userEntitlement.upsert({
         where: { userKey },
-        create: { userKey, nickname, subActive:r.active, subPlatform:'android', subProductId:body.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, pendingAndroid:false, androidPurchaseToken: body.purchaseToken, lastVerifyAt:new Date(), verifyError:null },
-        update: {           nickname, subActive:r.active, subPlatform:'android', subProductId:body.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, pendingAndroid:false, androidPurchaseToken: body.purchaseToken, lastVerifyAt:new Date(), verifyError:null },
+        create: { userKey, nickname, subActive:r.active, subPlatform:'android', subProductId:r.productId || body.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, pendingAndroid:false, androidPurchaseToken: body.purchaseToken, lastVerifyAt:new Date(), verifyError:null },
+        update: {           nickname, subActive:r.active, subPlatform:'android', subProductId:r.productId || body.productId, subExpiry: r.expiryMs? new Date(r.expiryMs): null, pendingAndroid:false, androidPurchaseToken: body.purchaseToken, lastVerifyAt:new Date(), verifyError:null },
       });
       logIapEvent({ source: 'android', event: 'verify_ok', userKey, active: r.active, productId: r.productId });
       return res.json({ active:r.active, expiryMs:r.expiryMs ?? null, pending:false });
@@ -129,3 +172,10 @@ module.exports = async (req, res) => {
   }
 };
 
+module.exports = handler;
+module.exports._internals = {
+  IOS_ALLOWED_PRODUCT_IDS,
+  ANDROID_ALLOWED_PRODUCT_IDS,
+  isAllowedProductId,
+  normalizeIosVerificationResult,
+};

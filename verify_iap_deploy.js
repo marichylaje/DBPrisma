@@ -64,6 +64,24 @@ async function main() {
     assert(res.status === 401, `status esperado 401, recibido ${res.status}`);
   });
 
+  await check('POST /api/iap/verify rechaza SKU inválida con 400 invalid_product_id', async () => {
+    const res = await fetch(`${BASE_URL}/api/iap/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${deviceToken}`,
+      },
+      body: JSON.stringify({
+        platform: 'android',
+        productId: 'premium_support_fake_smoke',
+        purchaseToken: 'smoke-test-dummy-token',
+      }),
+    });
+    assert(res.status === 400, `status esperado 400, recibido ${res.status}`);
+    const body = await res.json();
+    assert(body && body.error === 'invalid_product_id', `error esperado invalid_product_id, recibido ${JSON.stringify(body)}`);
+  });
+
   await check('POST /api/admin/reconcile-subscriptions rechaza un token de dispositivo (401)', async () => {
     const res = await fetch(`${BASE_URL}/api/admin/reconcile-subscriptions`, {
       method: 'POST',

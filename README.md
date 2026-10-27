@@ -143,6 +143,19 @@ Autenticación:
 - `POST|GET /api/admin/reconcile-subscriptions`
 - `POST|GET /api/admin/reverify-pending`
 
+Política de SKUs (allowlist estricta):
+- Solo SKUs en catálogo conceden/actualizan entitlement premium.
+- Cualquier `productId` Android fuera de catálogo se rechaza con `400 { error: "invalid_product_id" }`.
+- En iOS, si Apple valida receipt pero el `productId` no pertenece al catálogo, el backend no concede premium (`active=false`) y registra warning de auditoría.
+- Todas las tiers de soporte mapean al mismo entitlement funcional (`premium`), sin diferencias de permisos.
+
+Matriz de product IDs soportados:
+
+| Plataforma | Product IDs permitidos |
+|---|---|
+| iOS | `premium.support.5`, `premium.support.8`, `premium.support.12`, `premium.support.15`, `premium.support.20` |
+| Android | `premium_support_5`, `premium_support_8`, `premium_support_12`, `premium_support_15`, `premium_support_20` |
+
 ### Mazos y colección
 - `POST /api/decks/save`
 - `POST|PATCH /api/decks/patch`

@@ -2,7 +2,7 @@ const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { sendServerError } = require('../lib/httpError');
 
 // Cambia este valor manualmente para forzar actualización de clientes.
-const LATEST_VERSION = '1.0.33';
+const LATEST_VERSION = '1.0.35';
 const ANDROID_STORE_URL =
   'https://play.google.com/store/apps/details?id=com.mtgdeckbuilder';
 const IOS_STORE_URL = 'https://apps.apple.com';

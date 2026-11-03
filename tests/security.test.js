@@ -340,3 +340,119 @@ test('iap/verify: iOS productId fuera de allowlist no activa premium', async () 
   assert.equal(upsertArgs.create.subActive, false);
   assert.equal(upsertArgs.create.subProductId, 'premium.support.999');
 });
+
+// Ejecuta api/iap/verify.js con lib/iap-apple-server.js sustituido por un mock.
+async function runIosVerifyWithAppleServerMock(appleServerMock, receipt) {
+  const verifyPath = path.join(root, 'api/iap/verify.js');
+  const verifyKey = require.resolve(verifyPath);
+  const serverKey = require.resolve(path.join(root, 'lib/iap-apple-server.js'));
+  const realIsSignedTransaction = require(serverKey).isSignedTransaction;
+  const oldVerifyModule = require.cache[verifyKey];
+  const oldServerModule = require.cache[serverKey];
+
+  delete require.cache[verifyKey];
+  require.cache[serverKey] = {
+    id: serverKey,
+    filename: serverKey,
+    loaded: true,
+    exports: { ...appleServerMock, isSignedTransaction: realIsSignedTransaction },
+    children: [],
+    paths: [],
+  };
+
+  const res = mockRes();
+  try {
+    const handler = require(verifyPath);
+    await handler({
+      method: 'POST',
+      headers: bearer(deviceA),
+      body: { platform: 'ios', receipt },
+      socket: {},
+    }, res);
+  } finally {
+    if (oldVerifyModule) require.cache[verifyKey] = oldVerifyModule;
+    else delete require.cache[verifyKey];
+    if (oldServerModule) require.cache[serverKey] = oldServerModule;
+    else delete require.cache[serverKey];
+  }
+  return res;
+}
+
+const FAKE_JWS = 'aaaa.bbbb.cccc';
+
+test('iap/verify: iOS acepta transacción StoreKit 2 (JWS) verificada y activa premium', async () => {
+  let upsertArgs = null;
+  overrides.set('userEntitlement.upsert', (args) => { upsertArgs = args; return {}; });
+  const expiryMs = Date.now() + 86_400_000;
+
+  const res = await runIosVerifyWithAppleServerMock({
+    verifyAppleTransaction: async (jws) => {
+      assert.equal(jws, FAKE_JWS);
+      return { active: true, expiryMs, productId: 'premium.support.8', originalTransactionId: 'otx-jws-ok' };
+    },
+  }, FAKE_JWS);
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(res.body, { active: true, expiryMs, pending: false });
+  assert.equal(upsertArgs.create.subActive, true);
+  assert.equal(upsertArgs.create.appleOriginalTransactionId, 'otx-jws-ok');
+});
+
+test('iap/verify: iOS rechaza JWS no confiable con 400 y no concede premium', async () => {
+  let upserted = false;
+  overrides.set('userEntitlement.upsert', () => { upserted = true; return {}; });
+
+  const res = await runIosVerifyWithAppleServerMock({
+    verifyAppleTransaction: async () => {
+      const err = new Error('apple_invalid_transaction');
+      err.appleCode = 'invalid_transaction';
+      throw err;
+    },
+  }, FAKE_JWS);
+
+  assert.equal(res.statusCode, 400);
+  assert.deepEqual(res.body, { error: 'invalid_transaction' });
+  assert.equal(upserted, false);
+});
+
+test('iap/verify: iOS devuelve 503 si Apple no está disponible para verificar el JWS', async () => {
+  let upserted = false;
+  overrides.set('userEntitlement.upsert', () => { upserted = true; return {}; });
+
+  const res = await runIosVerifyWithAppleServerMock({
+    verifyAppleTransaction: async () => {
+      const err = new Error('apple_verification_unavailable');
+      err.appleCode = 'verification_unavailable';
+      throw err;
+    },
+  }, FAKE_JWS);
+
+  assert.equal(res.statusCode, 503);
+  assert.equal(upserted, false);
+});
+
+test('iap/verify: iOS JWS con productId fuera de allowlist no activa premium', async () => {
+  let upsertArgs = null;
+  overrides.set('userEntitlement.upsert', (args) => { upsertArgs = args; return {}; });
+
+  const res = await runIosVerifyWithAppleServerMock({
+    verifyAppleTransaction: async () => ({
+      active: true,
+      expiryMs: Date.now() + 60_000,
+      productId: 'premium.support.999',
+      originalTransactionId: 'otx-jws-bad-sku',
+    }),
+  }, FAKE_JWS);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.active, false);
+  assert.equal(upsertArgs.create.subActive, false);
+});
+
+test('isSignedTransaction distingue JWS de recibos base64 legacy', () => {
+  const { isSignedTransaction } = require(path.join(root, 'lib/iap-apple-server.js'));
+  assert.equal(isSignedTransaction('eyJhbGciOiJFUzI1NiJ9.eyJhIjoxfQ.c2ln-_x'), true);
+  assert.equal(isSignedTransaction('TUlJVGhRWUpLb1pJaHZjTkFRY0NvSUlUZGpDQ0V6SUNBUUV4'), false);
+  assert.equal(isSignedTransaction('a.b'), false);
+  assert.equal(isSignedTransaction(undefined), false);
+});

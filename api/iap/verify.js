@@ -1,6 +1,7 @@
 ﻿const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { prisma } = require('../../lib/prisma');
 const { verifyAppleReceipt } = require('../../lib/iap-apple');
+const { verifyAppleTransaction, isSignedTransaction } = require('../../lib/iap-apple-server');
 const { verifyAndroidSub } = require('../../lib/iap-google');
 const { requireOwner } = require('../../lib/auth');
 const { logIapEvent } = require('../../lib/iapLogger');
@@ -78,7 +79,26 @@ const handler = async (req, res) => {
       return res.status(400).json({ error: 'productId and purchaseToken required' });
     }
     if (body.platform === 'ios') {
-      const r = await verifyAppleReceipt(body.receipt);
+      // Preferido: JWS de StoreKit 2 (react-native-iap >= 14). El recibo base64 (verifyReceipt, en desuso
+      // por Apple) solo se mantiene para versiones antiguas de la app.
+      let r;
+      if (isSignedTransaction(body.receipt)) {
+        try {
+          r = await verifyAppleTransaction(body.receipt);
+        } catch (e) {
+          if (e && e.appleCode === 'invalid_transaction') {
+            logIapEvent({ level: 'warn', source: 'apple', event: 'verify_invalid_transaction', userKey, error: String(e.message || e) });
+            return res.status(400).json({ error: 'invalid_transaction' });
+          }
+          if (e && e.appleCode === 'verification_unavailable') {
+            logIapEvent({ level: 'error', source: 'apple', event: 'verify_unavailable', userKey, error: String(e.message || e) });
+            return res.status(503).json({ error: 'verification_unavailable' });
+          }
+          throw e;
+        }
+      } else {
+        r = await verifyAppleReceipt(body.receipt);
+      }
       const { result: verifiedResult, hasInvalidProduct } = normalizeIosVerificationResult(r);
 
       if (hasInvalidProduct) {

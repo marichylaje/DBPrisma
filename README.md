@@ -118,7 +118,7 @@ Otros comandos:
 Autenticación:
 - Endpoints de datos y de usuario exigen `Authorization: Bearer <JWT>` (sesión de cuenta o de dispositivo; ver "Modelo de identidad").
 - Endpoints admin/internos (`/api/admin/*`) usan `x-app-secret: <ADMIN_SECRET>` o `Authorization: Bearer <CRON_SECRET>` (Vercel Cron).
-- Públicos (con rate limit): `auth-register`, `auth-login`, `auth-device`, `alldecks/list`, `share/get`, `prices/history`, `tournaments/search`, `decks/downloads/batch`, `analytics/track`.
+- Públicos (con rate limit): `auth-register`, `auth-login`, `auth-device`, `alldecks/list` (`?view=summary&limit=&cursor=` paginado y sin cartas), `alldecks/get` (cartas de un deck), `share/get`, `prices/history`, `tournaments/search`, `decks/downloads/batch`, `analytics/track`.
 - Excepciones:
   - `/api/iap/apple-webhook` (firma criptográfica Apple)
   - `/api/iap/google-webhook` (OIDC token de Pub/Sub)
@@ -273,6 +273,18 @@ npx prisma generate
 
 Notas:
 - algunos scripts de prueba son integraciones directas y dependen de una DB real con esquema vigente.
+- los scripts que creaban usuarios de prueba en la DB (`test_user_profile.js`, `test_tournament_platform.js`) fueron eliminados: la DB del `.env` es producción.
+
+## Eliminar un usuario y sus datos
+
+Edita la constante `USER_KEY` en `scripts/delete-user.js` y ejecuta:
+
+```bash
+node scripts/delete-user.js --dry-run   # solo muestra qué se borraría (no modifica nada)
+node scripts/delete-user.js             # pide confirmación y borra en una transacción
+```
+
+Borra el `User` y todo lo asociado (mazos, colección, wishlist, amistades, friend nights, torneos, analítica, IAP, descargas). La lógica vive en `lib/purgeUser.js`. Opera sobre la DB del `.env` (producción).
 
 ## Checklist de salida a producción
 

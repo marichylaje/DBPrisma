@@ -456,3 +456,52 @@ test('isSignedTransaction distingue JWS de recibos base64 legacy', () => {
   assert.equal(isSignedTransaction('a.b'), false);
   assert.equal(isSignedTransaction(undefined), false);
 });
+
+// ---- Galería AllDecks: listado paginado liviano + detalle bajo demanda ---------------------
+test('alldecks/list?view=summary pagina por cursor y no envía cartas', async () => {
+  const mkDeck = (id, cards) => ({
+    id, userKey: 'dev_AAAA', userId: null, nickname: 'ana', deckName: `d${id}`,
+    commanderName: 'Atraxa', partnerName: null, cards, sideboard: [], cardCount: 100, downloadCount: 3,
+  });
+  overrides.set('allDeck.findMany', () => [
+    mkDeck('a', [{ name: 'Sol Ring', count: 1 }]),
+    mkDeck('b', [{ name: 'sol  ring', count: 1 }]),
+    mkDeck('c', [{ name: 'Mana Crypt', count: 1 }]),
+  ]);
+  const res = await run('api/alldecks/list.js', { query: { view: 'summary', limit: '2', cursor: 'z' } });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.decks.length, 2);
+  assert.equal(res.body.nextCursor, 'b');
+  for (const deck of res.body.decks) {
+    assert.equal(deck.cards, undefined);
+    assert.equal(deck.sideboard, undefined);
+    assert.equal(deck.userId, undefined);
+  }
+  assert.equal(res.body.decks[0].compositionHash, res.body.decks[1].compositionHash);
+  const call = calls.find((c) => c.model === 'allDeck' && c.method === 'findMany');
+  assert.equal(call.args.take, 3);
+  assert.deepEqual(call.args.cursor, { id: 'z' });
+  assert.equal(call.args.skip, 1);
+});
+
+test('alldecks/list sin view mantiene el formato legacy con cartas', async () => {
+  overrides.set('allDeck.findMany', () => [{
+    id: 'a', userKey: 'dev_AAAA', nickname: 'ana', deckName: 'd', commanderName: 'Atraxa',
+    cards: [{ name: 'Sol Ring', count: 1 }], sideboard: [], cardCount: 100, downloadCount: 0,
+  }]);
+  const res = await run('api/alldecks/list.js', { query: {} });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.nextCursor, undefined);
+  assert.deepEqual(res.body.decks[0].cards, [{ name: 'Sol Ring', count: 1 }]);
+});
+
+test('alldecks/get valida id y devuelve sólo cartas', async () => {
+  const bad = await run('api/alldecks/get.js', { query: {} });
+  assert.equal(bad.statusCode, 400);
+  const missing = await run('api/alldecks/get.js', { query: { id: 'nope' } });
+  assert.equal(missing.statusCode, 404);
+  overrides.set('allDeck.findUnique', () => ({ id: 'a', cards: [{ name: 'Sol Ring', count: 1 }], sideboard: null }));
+  const ok = await run('api/alldecks/get.js', { query: { id: 'a' } });
+  assert.equal(ok.statusCode, 200);
+  assert.deepEqual(ok.body.deck, { id: 'a', cards: [{ name: 'Sol Ring', count: 1 }], sideboard: [] });
+});

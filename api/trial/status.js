@@ -1,7 +1,7 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 // Muestra SOLO el estado del trial (no mezcla con suscripción)
-const { prisma } = require('../../lib/prisma');
 const { requireOwner } = require('../../lib/auth');
+const { readTrialDevice, resolveDeviceTrial } = require('../../lib/deviceTrial');
 const { sendServerError } = require('../../lib/httpError');
 
 module.exports = async (req, res) => {
@@ -13,19 +13,11 @@ module.exports = async (req, res) => {
     const auth = requireOwner(req, res);
     if (!auth) return;
 
-    const ent = await prisma.userEntitlement.findUnique({ where: { userKey: auth.userKey } });
-    const now = Date.now();
-
-    const trialGranted = !!ent?.trialGranted;
-    const trialActive =
-      !!(ent?.trialGranted && ent?.trialExpiry && ent.trialExpiry.getTime() > now);
-
-    res.json({
-      trialGranted,
-      active: trialActive,
-      startMs: ent?.trialStart ? ent.trialStart.getTime() : null,
-      expiryMs: trialActive ? ent.trialExpiry.getTime() : null,
-    });
+    res.setHeader('Cache-Control', 'no-store');
+    const device = readTrialDevice(req, res, auth);
+    if (!device) return;
+    const { trial } = await resolveDeviceTrial(auth, device.deviceId);
+    res.json(trial);
   } catch (e) {
     sendServerError(res, '/api/trial/status', e);
   }

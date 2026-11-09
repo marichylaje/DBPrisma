@@ -89,14 +89,42 @@ model UserEntitlement {
   lastVerifyAt         DateTime?
   verifyError          String?
 
-  trialGranted Boolean   @default(false)
-  trialStart   DateTime?
-  trialExpiry  DateTime?
+  trialGranted   Boolean           @default(false)
+  trialStart     DateTime?
+  trialExpiry    DateTime?
+  sharedTrialKey String?
+  sharedTrial    UserEntitlement?  @relation("SharedTrial", fields: [sharedTrialKey], references: [userKey], onDelete: Restrict, onUpdate: Cascade)
+  trialAccounts  UserEntitlement[] @relation("SharedTrial")
+  trialDevices   UniqueDevice[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([subActive])
+  @@index([sharedTrialKey])
+}
+
+model UniqueDevice {
+  id            String             @id @default(cuid())
+  identityHash  String             @unique
+  platform      String
+  trialOwnerKey String?
+  trialOwner    UserEntitlement?   @relation(fields: [trialOwnerKey], references: [userKey], onDelete: Restrict, onUpdate: Cascade)
+  users         UniqueDeviceUser[]
+  createdAt     DateTime           @default(now())
+
+  @@index([trialOwnerKey])
+}
+
+model UniqueDeviceUser {
+  deviceId  String
+  userId    String
+  device    UniqueDevice @relation(fields: [deviceId], references: [id], onDelete: Restrict)
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@id([deviceId, userId])
+  @@index([userId])
 }
 
 model ProcessedIapNotification {
@@ -198,6 +226,7 @@ model SharedDeck {
 }
 
 model User {
+  devices                    UniqueDeviceUser[]
   decks                      UserDeck[]
   cloudDecks                 CloudDeck[]
   allDecks                   AllDeck[]

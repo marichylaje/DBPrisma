@@ -38,6 +38,64 @@ Patrón común:
 - El dueño de los datos (`userKey`) sale **siempre del token**, nunca del body/query. Un token de dispositivo no sirve en rutas de cuenta.
 - Al iniciar sesión, `POST /api/auth-sync/migrate-user-data` traslada los datos anónimos a la cuenta usando el token de dispositivo como prueba de propiedad.
 
+### Trial por cuenta y dispositivo
+
+- `UniqueDevice` registra el hash SHA-256 del identificador app-scoped de Android/iOS
+  (namespaced por plataforma). No se almacena el identificador recibido en claro.
+  `UniqueDeviceUser` vincula múltiples cuentas y dispositivos; no se usa email/nickname
+  como identidad ni IMEI/MAC/identificadores publicitarios.
+- `POST /api/auth-device` admite `{ platform, deviceIdentity, previousToken? }`.
+  Vincula la sesión a `UniqueDevice.id`, incluido como `deviceId` en el JWT.
+  `previousToken` conserva el propietario anónimo durante la actualización y adopta
+  su trial existente. Repetir un identificador sin un token previo válido **nunca**
+  recupera los datos de otra sesión anónima: solo encuentra el registro anti-abuso.
+- Las llamadas a entitlement/trial llevan `Authorization` del dueño y
+  `X-Device-Token` como prueba firmada de la vinculación. El servidor ignora los
+  `userKey`/device IDs del body/query para determinar propietarios.
+- Solo hay una ventana por dispositivo y una por cuenta. Cuentas nuevas en el mismo
+  móvil heredan el mismo trial, incluso si expiró; una cuenta usada en un móvil nuevo
+  tampoco inicia otro. Si ambos tienen trials distintos, la expiración efectiva es
+  la menor. Las suscripciones nunca se heredan ni se limitan por esta regla.
+- `UniqueDevice.trialOwnerKey` apunta al `UserEntitlement` original.
+  Las cuentas que lo comparten guardan `sharedTrialKey` apuntando al mismo original.
+  La fecha autoritativa sigue siendo `UserEntitlement.trialExpiry` del original:
+  una edición allí se refleja en todas sus cuentas/dispositivos en el siguiente
+  refresco. Para ampliar testers en conjunto, `npm run extend-trial` actualiza
+  únicamente originales, no copias. Un segundo trial independiente puede seguir
+  limitando una cuenta usada en otro dispositivo.
+- La concesión/vinculación usa transacciones `Serializable` con reintentos acotados
+  ante conflictos: dos registros simultáneos no reinician la ventana.
+- `entitlement` añade `trialExpiryMs`; `trial/status` añade `canStartTrial`.
+  Ambos, y `trial/start`, responden con `Cache-Control: no-store`.
+  Nuevos trials sin identidad móvil vinculada devuelven `428 mobile_device_required`.
+  Web/apps antiguas conservan lecturas de trials y suscripciones existentes.
+- Borrar una cuenta elimina sus vínculos con `User`, pero conserva el registro
+  pseudónimo del dispositivo y el trial consumido. La purga administrativa también
+  conserva trials y elimina su nickname para no reabrir pruebas ni romper trials
+  compartidos. Revisar y documentar fundamento/retención en la política de privacidad.
+
+#### Despliegue y límites
+
+1. Revisar copia de seguridad y aplicar la migración
+   `20261109140000_add_device_trials` con `npm run migrate`; no reinicia ni modifica
+   fechas históricas. Luego ejecutar `npx prisma generate` y desplegar backend.
+2. Distribuir la app actualizada. En el primer uso adopta trials históricos:
+   los antiguos datos no contienen identidad hardware, por lo que no es posible
+   reconstruir retrospectivamente qué cuentas usaban el mismo móvil.
+3. Comprobar en staging dos cuentas en un móvil, la misma cuenta en otro móvil,
+   una ampliación del trial original y login/logout con trial expirado.
+4. Antes de publicar, actualizar privacidad y declaraciones Data Safety/App Privacy
+   por la recogida del identificador y revisar consentimiento/políticas de tiendas.
+
+Esto limita el abuso de cuentas nuevas en clientes normales, no demuestra hardware.
+Un cliente manipulado puede declarar otro identificador; un reset de fábrica, cambio
+de usuario/clave de firma Android o ciertas restauraciones iOS pueden cambiarlo.
+Para resistencia adicional, siguiente fase: challenge/nonce del servidor, Play
+Integrity en Android y App Attest en iOS, verificados en backend y vinculados a sesión
+y concesión; valorar DeviceCheck para la memoria anti-abuso en iOS. No aceptar un
+booleano de "integridad" enviado por la app ni activar enforcement hasta validar
+atestación real y compatibilidad de testers/dispositivos.
+
 ### Capa de negocio
 `lib/` concentra piezas compartidas:
 - `auth.js`: emisión/verificación de JWT (HS256, `iss`/`aud`) y `checkAdminSecret`
@@ -285,6 +343,17 @@ node scripts/delete-user.js             # pide confirmación y borra en una tran
 ```
 
 Borra el `User` y todo lo asociado (mazos, colección, wishlist, amistades, friend nights, torneos, analítica, IAP, descargas). La lógica vive en `lib/purgeUser.js`. Opera sobre la DB del `.env` (producción).
+
+## Extender el trial a todos los usuarios
+
+Cambia `TRIAL_EXPIRY_DATE` (formato `dd-MM-yyyy`) en `scripts/extend-trial.js` y ejecuta:
+
+```bash
+node scripts/extend-trial.js --dry-run   # solo muestra cuántos usuarios se actualizarían
+node scripts/extend-trial.js             # pide confirmación y actualiza UserEntitlement.trialExpiry
+```
+
+Solo toca filas con `trialGranted = true` y `trialExpiry` anterior a la nueva fecha (nunca acorta). Opera sobre la DB del `.env` (producción).
 
 ## Checklist de salida a producción
 

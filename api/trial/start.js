@@ -1,9 +1,8 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 // Inicia un trial de N días (default 15). Si ya fue concedido, devuelve el existente.
-const { prisma } = require('../../lib/prisma');
 const { requireOwner } = require('../../lib/auth');
+const { readTrialDevice, resolveDeviceTrial } = require('../../lib/deviceTrial');
 const { checkRateLimitTiers } = require('../../lib/rateLimit');
-const { resolveOwnerRecord } = require('../../lib/userLookup');
 const { sendServerError } = require('../../lib/httpError');
 
 module.exports = async (req, res) => {
@@ -14,6 +13,14 @@ module.exports = async (req, res) => {
 
     const auth = requireOwner(req, res);
     if (!auth) return;
+    const device = readTrialDevice(req, res, auth);
+    if (!device) return;
+    if (!device.deviceId) {
+      return res.status(428).json({
+        error: 'mobile_device_required',
+        message: 'Actualiza la app movil para iniciar la prueba gratuita.',
+      });
+    }
     // Evita abuso de trials gratuitos (múltiples trials por IP) aunque generen otra sesión de dispositivo.
     const tiersOk = await checkRateLimitTiers(
       req,
@@ -27,44 +34,9 @@ module.exports = async (req, res) => {
     );
     if (!tiersOk) return;
 
-    const { userKey, nickname } = await resolveOwnerRecord(auth);
-
-    const ent = await prisma.userEntitlement.findUnique({ where: { userKey } });
-    if (ent?.trialGranted) {
-      return res.json({
-        alreadyGranted: true,
-        startMs: ent.trialStart ? ent.trialStart.getTime() : null,
-        expiryMs: ent.trialExpiry ? ent.trialExpiry.getTime() : null,
-      });
-    }
-
-    // Duración de trial fijada en servidor; el cliente NO puede modificarla (evita abuso de trial infinito).
-    const nDays = Number(process.env.TRIAL_DAYS) > 0 ? Number(process.env.TRIAL_DAYS) : 15;
-    const now = Date.now();
-    const expiry = new Date(now + nDays * 24 * 60 * 60 * 1000);
-
-    const saved = await prisma.userEntitlement.upsert({
-      where: { userKey },
-      create: {
-        userKey,
-        nickname,
-        trialGranted: true,
-        trialStart: new Date(now),
-        trialExpiry: expiry,
-      },
-      update: {
-        nickname,
-        trialGranted: true,
-        trialStart: new Date(now),
-        trialExpiry: expiry,
-      },
-    });
-
-    res.json({
-      alreadyGranted: false,
-      startMs: saved.trialStart.getTime(),
-      expiryMs: saved.trialExpiry.getTime(),
-    });
+    res.setHeader('Cache-Control', 'no-store');
+    const { trial } = await resolveDeviceTrial(auth, device.deviceId, { start: true });
+    res.json(trial);
   } catch (e) {
     sendServerError(res, '/api/trial/start', e);
   }

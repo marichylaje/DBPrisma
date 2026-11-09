@@ -126,6 +126,13 @@ Dominios principales:
 - `APP_JWT_SECRET` (≥ 32 caracteres aleatorios; el backend se niega a firmar con una clave más corta)
 - `ADMIN_SECRET` (solo server-to-server: `/api/admin/*`, GitHub Actions. **Nunca en la app**)
 
+### Versiones mínimas de la app
+- `MIN_REQUIRED_VERSION_IOS` y `MIN_REQUIRED_VERSION_ANDROID` definen por separado
+  la versión mínima obligatoria informada por `GET /api/app-config`.
+- Si una variable está vacía o no está configurada, el endpoint usa `LATEST_VERSION`
+  como valor de respaldo. `latestVersion`, `minRequiredVersion` e
+  `isUpdateRequired` se mantienen para compatibilidad con versiones antiguas de la app.
+
 ### CORS (DONE)
 - `APP_ALLOWED_ORIGINS` (lista separada por comas, ej: `https://app.midominio.com,https://admin.midominio.com`)
 

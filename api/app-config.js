@@ -2,7 +2,13 @@ const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { sendServerError } = require('../lib/httpError');
 
 // Cambia este valor manualmente para forzar actualización de clientes.
-const LATEST_VERSION = '1.0.35';
+const LATEST_VERSION = '1.1.02';
+const LATEST_IOS_VERSION = '1.1.02';
+const LATEST_ANDROID_VERSION = '1.1.02';
+const MIN_REQUIRED_VERSION_IOS =
+  process.env.MIN_REQUIRED_VERSION_IOS?.trim() ||  LATEST_IOS_VERSION ||  LATEST_VERSION;
+const MIN_REQUIRED_VERSION_ANDROID =
+  process.env.MIN_REQUIRED_VERSION_ANDROID?.trim() || LATEST_ANDROID_VERSION ||  LATEST_VERSION;
 const ANDROID_STORE_URL =
   'https://play.google.com/store/apps/details?id=com.mtgdeckbuilder';
 const IOS_STORE_URL = 'https://apps.apple.com';
@@ -62,6 +68,8 @@ module.exports = async (req, res) => {
     res.status(200).json({
       latestVersion: LATEST_VERSION,
       minRequiredVersion: LATEST_VERSION,
+      minRequiredVersionIos: MIN_REQUIRED_VERSION_IOS,
+      minRequiredVersionAndroid: MIN_REQUIRED_VERSION_ANDROID,
       isUpdateRequired: currentVersion
         ? isLowerVersion(currentVersion, LATEST_VERSION)
         : false,

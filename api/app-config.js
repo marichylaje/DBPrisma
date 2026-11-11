@@ -2,8 +2,8 @@ const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { sendServerError } = require('../lib/httpError');
 
 // Cambia este valor manualmente para forzar actualización de clientes.
-const LATEST_VERSION = '1.1.02';
-const LATEST_IOS_VERSION = '1.1.02';
+const LATEST_VERSION = '1.1.03';
+const LATEST_IOS_VERSION = '1.1.03';
 const LATEST_ANDROID_VERSION = '1.1.04';
 const MIN_REQUIRED_VERSION_IOS =
   process.env.MIN_REQUIRED_VERSION_IOS?.trim() ||  LATEST_IOS_VERSION ||  LATEST_VERSION;

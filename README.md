@@ -53,8 +53,21 @@ Patrón común:
   registrar cuentas sin actualizarse: coordinar despliegue de backend y app.
 - `POST /api/auth-reset-password` recibe `{ email, code, password }`. Solo cambia
   la contrasena de la cuenta vinculada al codigo; no inicia sesion automaticamente.
+  Marca `emailVerifiedAt` en la misma transaccion y devuelve
+  `{ ok: true, emailVerified: true }`.
   La nueva contrasena conserva la regla existente: entre 8 y 128 caracteres.
-- Codigos de 8 digitos, caducidad de 10 minutos, maximo 5 intentos fallidos,
+- Login devuelve `emailVerified` tanto en la raiz como en `user`, derivado de
+  `User.emailVerifiedAt`. No hace falta otra columna booleana ni otra migracion.
+  Login no bloquea cuentas historicas cuyo correo aun no esta verificado.
+- `POST /api/auth-verify-email` exige JWT de usuario (`kind: user`).
+  `{ action: "send", language? }` envia un codigo solo al correo de la cuenta
+  autenticada y devuelve `{ ok: true, emailVerified: false, retryAfterSeconds: 60 }`.
+  `{ action: "confirm", code }` verifica y marca esa misma cuenta, sin cambiar su
+  contrasena ni su JWT, devolviendo `{ ok: true, emailVerified: true }`.
+  Si ya esta verificada, responde ese estado sin enviar otro email.
+  No acepta un correo/ID de destino del cliente; codigos de registro, recuperacion
+  y verificacion estan separados por proposito y vinculados a su propietario.
+- Codigos de 6 digitos en todos los flujos, caducidad de 10 minutos, maximo 5 intentos fallidos,
   uso unico y espera de 60 segundos entre envios por correo/proposito.
   Maximo 5 solicitudes de envio por correo y hora, compartido entre IPs y
   propositos; ademas se aplican limites por IP. El correo del limitador se
@@ -76,6 +89,8 @@ Patrón común:
 3. Aplicar `npm run migrate` para `20261112185000_add_auth_email_challenges`,
    ejecutar `npx prisma generate` y desplegar backend y app coordinadamente.
    La migracion no altera contrasenas ni verifica cuentas historicas.
+   Si ya se aplico, no se necesita una migracion adicional para la invitacion de
+   verificacion. Los codigos antiguos de 8 digitos deben reenviarse tras actualizar.
 4. Probar en staging registro y recuperacion completos, correo inexistente,
    reenvio, codigo incorrecto/expirado/usado y fallo del proveedor.
 5. El cron existente `/api/admin/cleanup` elimina los desafios caducados.

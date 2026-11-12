@@ -21,6 +21,7 @@ const LOGIN_FAIL_LIMIT_GLOBAL = 40;
 
 module.exports = async (req, res) => {
   applyCors(req, res);
+  res.setHeader('Cache-Control', 'no-store');
   if (handleCorsPreflight(req, res)) return;
 
   try {
@@ -78,6 +79,7 @@ module.exports = async (req, res) => {
         xp: true,
         level: true,
         passwordHash: true,
+        emailVerifiedAt: true,
         createdAt: true,
       },
     });
@@ -93,9 +95,11 @@ module.exports = async (req, res) => {
     }
 
     // Return user without passwordHash
-    const { passwordHash: _, ...safeUser } = user;
+    const { passwordHash: _, emailVerifiedAt, ...profile } = user;
+    const emailVerified = Boolean(emailVerifiedAt);
+    const safeUser = { ...profile, emailVerified };
     const token = issueUserToken(safeUser);
-    res.status(200).json({ ok: true, userId: user.id, user: safeUser, token });
+    res.status(200).json({ ok: true, userId: user.id, user: safeUser, token, emailVerified });
   } catch (e) {
     sendServerError(res, '/api/auth-login', e);
   }

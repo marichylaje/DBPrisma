@@ -17,11 +17,12 @@ module.exports = async (req, res) => {
 
   try {
     const now = Date.now();
-    const [rateLimit, analytics, sharedDecks, iapTracking] = await Promise.all([
+    const [rateLimit, analytics, sharedDecks, iapTracking, authEmailChallenges] = await Promise.all([
       prisma.rateLimitHit.deleteMany({ where: { windowStart: { lt: new Date(now - 2 * DAY_MS) } } }),
       prisma.analyticsEvent.deleteMany({ where: { occurredAt: { lt: new Date(now - 90 * DAY_MS) } } }),
       prisma.sharedDeck.deleteMany({ where: { createdAt: { lt: new Date(now - 3 * DAY_MS) } } }),
       prisma.iapTrackingEvent.deleteMany({ where: { occurredAt: { lt: new Date(now - 180 * DAY_MS) } } }),
+      prisma.authEmailChallenge.deleteMany({ where: { expiresAt: { lt: new Date(now) } } }),
     ]);
 
     res.json({
@@ -31,6 +32,7 @@ module.exports = async (req, res) => {
         analyticsEvent: analytics.count,
         sharedDeck: sharedDecks.count,
         iapTrackingEvent: iapTracking.count,
+        authEmailChallenge: authEmailChallenges.count,
       },
     });
   } catch (e) {

@@ -125,6 +125,9 @@ test('admin: un token de usuario/dispositivo no sirve; ADMIN_SECRET y CRON_SECRE
   assert.equal(wrongHeader.statusCode, 401);
   const okAdmin = await run('api/admin/cleanup.js', { headers: { 'x-app-secret': 'test-admin-secret' } });
   assert.equal(okAdmin.statusCode, 200);
+  const challengesCleanup = calls.find((c) => c.model === 'authEmailChallenge' && c.method === 'deleteMany');
+  assert.ok(challengesCleanup.args.where.expiresAt.lt instanceof Date);
+  assert.equal(okAdmin.body.deleted.authEmailChallenge, 0);
   const okCron = await run('api/admin/cleanup.js', { headers: bearer('test-cron-secret') });
   assert.equal(okCron.statusCode, 200);
 });
@@ -457,8 +460,8 @@ test('isSignedTransaction distingue JWS de recibos base64 legacy', () => {
   assert.equal(isSignedTransaction(undefined), false);
 });
 
-// ---- Galería AllDecks: listado paginado liviano + detalle bajo demanda ---------------------
-test('alldecks/list?view=summary pagina por cursor y no envía cartas', async () => {
+// ---- Galerï¿½a AllDecks: listado paginado liviano + detalle bajo demanda ---------------------
+test('alldecks/list?view=summary pagina por cursor y no envï¿½a cartas', async () => {
   const mkDeck = (id, cards) => ({
     id, userKey: 'dev_AAAA', userId: null, nickname: 'ana', deckName: `d${id}`,
     commanderName: 'Atraxa', partnerName: null, cards, sideboard: [], cardCount: 100, downloadCount: 3,
@@ -495,7 +498,7 @@ test('alldecks/list sin view mantiene el formato legacy con cartas', async () =>
   assert.deepEqual(res.body.decks[0].cards, [{ name: 'Sol Ring', count: 1 }]);
 });
 
-test('alldecks/get valida id y devuelve sólo cartas', async () => {
+test('alldecks/get valida id y devuelve sï¿½lo cartas', async () => {
   const bad = await run('api/alldecks/get.js', { query: {} });
   assert.equal(bad.statusCode, 400);
   const missing = await run('api/alldecks/get.js', { query: { id: 'nope' } });

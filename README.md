@@ -38,6 +38,50 @@ Patrón común:
 - El dueño de los datos (`userKey`) sale **siempre del token**, nunca del body/query. Un token de dispositivo no sirve en rutas de cuenta.
 - Al iniciar sesión, `POST /api/auth-sync/migrate-user-data` traslada los datos anónimos a la cuenta usando el token de dispositivo como prueba de propiedad.
 
+### Verificacion de correo y recuperacion de contrasena
+
+- `POST /api/auth-email-code` recibe `{ email, purpose: "register" | "reset", language? }`.
+  Idiomas: `es`, `en`, `de`, `fr`, `it`, `ja`, `pt`; por defecto `en`.
+  Devuelve siempre `{ ok: true, retryAfterSeconds: 60 }` para solicitudes procesadas,
+  sin revelar si existe la cuenta. No envia correo de recuperacion a cuentas
+  inexistentes ni de registro a correos ocupados. Errores de envio/configuracion
+  se registran en el servidor y responden 500, nunca exito ficticio.
+- `POST /api/auth-register` ahora exige un `code` de verificacion del correo,
+  ademas de `username`, `email`, `password`. La cuenta solo se crea al verificarlo.
+  `emailVerifiedAt` registra esa prueba; las cuentas existentes siguen pudiendo
+  iniciar sesion sin verificar retroactivamente. Clientes antiguos no pueden
+  registrar cuentas sin actualizarse: coordinar despliegue de backend y app.
+- `POST /api/auth-reset-password` recibe `{ email, code, password }`. Solo cambia
+  la contrasena de la cuenta vinculada al codigo; no inicia sesion automaticamente.
+  La nueva contrasena conserva la regla existente: entre 8 y 128 caracteres.
+- Codigos de 8 digitos, caducidad de 10 minutos, maximo 5 intentos fallidos,
+  uso unico y espera de 60 segundos entre envios por correo/proposito.
+  Maximo 5 solicitudes de envio por correo y hora, compartido entre IPs y
+  propositos; ademas se aplican limites por IP. El correo del limitador se
+  representa mediante SHA-256, no en claro.
+  Se guardan HMAC, no codigos en claro. Reenvios reemplazan el codigo anterior.
+  Verificar/consumir y crear/cambiar la cuenta son una transaccion atomica;
+  locks de PostgreSQL impiden reutilizacion concurrente.
+- Los JWT ya emitidos conservan su vigencia actual (7 dias). El cambio de
+  contrasena **no revoca sesiones existentes**; revocacion por dispositivo/version
+  de sesion requiere una siguiente fase en la capa de autenticacion.
+
+#### Configuracion y despliegue
+
+1. Configurar `RESEND_API_KEY`, `AUTH_EMAIL_FROM` (por ejemplo
+   `MTG DeckBuilder <accounts@tu-dominio.com>`) y `AUTH_EMAIL_CODE_SECRET`
+   (secreto aleatorio de al menos 32 caracteres) en Vercel, nunca en la app.
+2. Verificar el dominio remitente en Resend y sus registros SPF/DKIM; configurar
+   DMARC y probar entrega/spam con cuentas reales.
+3. Aplicar `npm run migrate` para `20261112185000_add_auth_email_challenges`,
+   ejecutar `npx prisma generate` y desplegar backend y app coordinadamente.
+   La migracion no altera contrasenas ni verifica cuentas historicas.
+4. Probar en staging registro y recuperacion completos, correo inexistente,
+   reenvio, codigo incorrecto/expirado/usado y fallo del proveedor.
+5. El cron existente `/api/admin/cleanup` elimina los desafios caducados.
+   Actualizar la politica de privacidad por el
+   envio de emails transaccionales a traves de Resend.
+
 ### Trial por cuenta y dispositivo
 
 - `UniqueDevice` registra el hash SHA-256 del identificador app-scoped de Android/iOS

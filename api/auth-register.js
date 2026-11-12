@@ -6,10 +6,12 @@ const { checkRateLimitTiers } = require('../lib/rateLimit');
 const { hashPassword } = require('../lib/password');
 const { parseOrReject, registerPayload } = require('../lib/validate');
 const { sendServerError } = require('../lib/httpError');
+const { withVerifiedEmailCode } = require('../lib/authEmail');
 const crypto = require('crypto');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
+  res.setHeader('Cache-Control', 'no-store');
   if (handleCorsPreflight(req, res)) return;
 
   try {
@@ -38,7 +40,7 @@ module.exports = async (req, res) => {
     const payload = parseOrReject(res, registerPayload, body);
     if (!payload) return;
 
-    const { username: normalizedUsername, email: normalizedEmail, password } = payload;
+    const { username: normalizedUsername, email: normalizedEmail, password, code } = payload;
 
     // Check username uniqueness (case-insensitive)
     const existingByUsername = await prisma.user.findFirst({
@@ -61,12 +63,13 @@ module.exports = async (req, res) => {
 
     let user;
     try {
-      user = await prisma.user.create({
+      const result = await withVerifiedEmailCode(normalizedEmail, 'register', code, (tx) => tx.user.create({
         data: {
           id: userId,
           nickname: normalizedUsername,
           email: normalizedEmail,
           passwordHash,
+          emailVerifiedAt: new Date(),
           role: 'player',
           xp: 0,
           level: 1,
@@ -80,7 +83,9 @@ module.exports = async (req, res) => {
           level: true,
           createdAt: true,
         },
-      });
+      }));
+      if (result.error) return res.status(400).json({ error: result.error });
+      user = result.value;
     } catch (createError) {
       // Carrera entre dos registros simultáneos con el mismo email.
       if (createError && createError.code === 'P2002') {
@@ -90,7 +95,7 @@ module.exports = async (req, res) => {
     }
 
     const token = issueUserToken(user);
-    res.status(201).json({ ok: true, userId: user.id, user, token });
+    res.status(201).json({ ok: true, userId: user.id, user: { ...user, emailVerified: true }, token, emailVerified: true });
   } catch (e) {
     sendServerError(res, '/api/auth-register', e);
   }

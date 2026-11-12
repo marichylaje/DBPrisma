@@ -23,6 +23,19 @@ model RateLimitHit {
   @@index([windowStart])
 }
 
+model AuthEmailChallenge {
+  email      String
+  purpose    String
+  codeHash   String
+  userId     String?
+  attempts   Int      @default(0)
+  expiresAt  DateTime
+  sentAt     DateTime @default(now())
+
+  @@id([email, purpose])
+  @@index([expiresAt])
+}
+
 // ----------------------------------------------------
 // TABLAS PROPIAS / COMPARTIDAS DE TRACKING Y ANALÍTICA
 // ----------------------------------------------------
@@ -242,6 +255,7 @@ model User {
   nickname                   String
   email                      String?             @unique
   passwordHash               String?
+  emailVerifiedAt            DateTime?
   role                       String
 
   xp    Int @default(0)

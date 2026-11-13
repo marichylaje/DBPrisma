@@ -56,6 +56,11 @@ Patrón común:
   Marca `emailVerifiedAt` en la misma transaccion y devuelve
   `{ ok: true, emailVerified: true }`.
   La nueva contrasena conserva la regla existente: entre 8 y 128 caracteres.
+  Tambien acepta `{ action: "verify", email, code }` para el paso previo:
+  devuelve `{ ok: true, codeVerified: true }` sin cambiar la cuenta ni consumir
+  el codigo. Conserva los limites de intentos/caducidad. El guardado manual
+  posterior vuelve a validar y consume el codigo atomicamente. No requiere
+  migraciones adicionales; desplegar backend antes que el nuevo frontend.
 - Login devuelve `emailVerified` tanto en la raiz como en `user`, derivado de
   `User.emailVerifiedAt`. No hace falta otra columna booleana ni otra migracion.
   Login no bloquea cuentas historicas cuyo correo aun no esta verificado.
@@ -362,6 +367,9 @@ Matriz de product IDs soportados:
 ### Analítica y precios
 - `AnalyticsEvent`
 - `CardPriceHistory`
+- El refresco de precios procesa solo impresiones presentes en colecciones y omite las ya actualizadas ese día UTC. Scryfall se consulta en lotes de hasta 75 cartas.
+- Se conservan hasta 30 muestras por carta. Los historiales de cartas ausentes de todas las colecciones se eliminan cuando su última actualización de precio supera los 90 días; las cartas activas se conservan.
+- Revisar el tamaño de `CardPriceHistory`, duración del cron y métricas de almacenamiento al superar 5.000 filas; no es un límite técnico, sino un punto de revisión preventiva.
 
 ## Realtime Socket (servicio separado)
 

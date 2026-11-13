@@ -1,7 +1,7 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { getJsonBody } = require('../lib/requestBody');
 const { checkRateLimitTiers } = require('../lib/rateLimit');
-const { parseOrReject, resetPasswordPayload } = require('../lib/validate');
+const { parseOrReject, resetPasswordPayload, resetCodePayload } = require('../lib/validate');
 const { hashPassword } = require('../lib/password');
 const { withVerifiedEmailCode } = require('../lib/authEmail');
 const { sendServerError } = require('../lib/httpError');
@@ -22,8 +22,20 @@ module.exports = async (req, res) => {
     } catch {
       return res.status(400).json({ error: 'invalid_json' });
     }
-    const payload = parseOrReject(res, resetPasswordPayload, body);
+    const isVerification = body?.action === 'verify';
+    const payload = parseOrReject(res, isVerification ? resetCodePayload : resetPasswordPayload, body);
     if (!payload) return;
+    if (isVerification) {
+      const result = await withVerifiedEmailCode(payload.email, 'reset', payload.code, async (tx, challenge) => {
+        const user = await tx.user.findFirst({
+          where: { id: challenge.userId, email: { equals: payload.email, mode: 'insensitive' }, passwordHash: { not: null } },
+          select: { id: true },
+        });
+        return user ? true : null;
+      }, { consume: false });
+      if (result.error) return res.status(400).json({ error: result.error });
+      return res.status(200).json({ ok: true, codeVerified: true });
+    }
     const passwordHash = await hashPassword(payload.password);
     const result = await withVerifiedEmailCode(payload.email, 'reset', payload.code, async (tx, challenge) => {
       const updated = await tx.user.updateMany({

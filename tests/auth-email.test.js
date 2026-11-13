@@ -474,3 +474,33 @@ test('verification rejects stale account tokens and does not send to missing acc
   assert.equal((await run('auth-verify-email.js', { action: 'send' }, 'POST', token)).statusCode, 409);
   assert.equal(emails.length, 0);
 });
+
+test('reset code verification does not change credentials or consume code before manual save', async () => {
+  const user = await existingUser();
+  const originalHash = user.passwordHash;
+  await requestEmailCode(email, 'reset', 'en');
+  const code = codeFromLastEmail();
+  const result = await run('auth-reset-password.js', { action: 'verify', email, code });
+  assert.deepEqual(result.body, { ok: true, codeVerified: true });
+  assert.equal(user.passwordHash, originalHash);
+  assert.equal(user.emailVerifiedAt, undefined);
+  assert.equal(challenges.size, 1);
+  const saved = await run('auth-reset-password.js', { email, code, password: 'new-password' });
+  assert.equal(saved.body.ok, true);
+  assert.ok(await verifyPassword('new-password', user.passwordHash));
+  assert.equal(challenges.size, 0);
+  assert.equal((await run('auth-reset-password.js', { action: 'verify', email, code })).body.error, 'invalid_or_expired_code');
+});
+
+test('reset verification rejects wrong codes and save rechecks expiration after verification', async () => {
+  const user = await existingUser();
+  await requestEmailCode(email, 'reset', 'en');
+  const code = codeFromLastEmail();
+  const wrong = code === '000000' ? '111111' : '000000';
+  assert.equal((await run('auth-reset-password.js', { action: 'verify', email, code: wrong })).body.error, 'invalid_or_expired_code');
+  assert.equal(challenges.get(`${email}:reset`).attempts, 1);
+  assert.equal((await run('auth-reset-password.js', { action: 'verify', email, code })).body.codeVerified, true);
+  challenges.get(`${email}:reset`).expiresAt = new Date(Date.now() - 1);
+  assert.equal((await run('auth-reset-password.js', { email, code, password: 'must-not-change' })).body.error, 'invalid_or_expired_code');
+  assert.ok(await verifyPassword('old-password', user.passwordHash));
+});

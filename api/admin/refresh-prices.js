@@ -15,6 +15,16 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const normalize = (s) => (s || '').toLowerCase().trim();
 
+function isSameUtcDay(timestamp, date) {
+  const timestampDate = new Date(timestamp);
+  return (
+    !Number.isNaN(timestampDate.getTime()) &&
+    timestampDate.getUTCFullYear() === date.getUTCFullYear() &&
+    timestampDate.getUTCMonth() === date.getUTCMonth() &&
+    timestampDate.getUTCDate() === date.getUTCDate()
+  );
+}
+
 function getScryfallIdentifier(cardKey) {
   if (cardKey.includes('|')) {
     const parts = cardKey.split('|');
@@ -56,18 +66,42 @@ module.exports = async (req, res) => {
       return res.status(200).json({ ok: true, message: 'No cards in collections to update.' });
     }
 
-    console.log(`[PriceRefresh] Encontradas ${cardsArray.length} cartas únicas para actualizar.`);
-
+    const now = new Date();
     // Obtener todos los historiales existentes de estas cartas en una sola consulta
     const existingRecords = await prisma.cardPriceHistory.findMany({
       where: {
         cardKey: { in: cardsArray },
       },
+      select: { cardKey: true, history: true },
     });
     const historyMap = new Map(existingRecords.map((r) => [r.cardKey, r.history]));
+    const refreshedToday = new Set(
+      existingRecords
+        .filter((record) => {
+          const history = Array.isArray(record.history) ? record.history : [];
+          const latest = history[history.length - 1];
+          return latest && isSameUtcDay(latest.timestamp, now);
+        })
+        .map((record) => record.cardKey),
+    );
+    const cardsToRefresh = cardsArray.filter((key) => !refreshedToday.has(key));
+
+    if (cardsToRefresh.length === 0) {
+      return res.status(200).json({
+        ok: true,
+        message: 'All active card prices were already refreshed today.',
+        activeCount: cardsArray.length,
+        skippedCount: cardsArray.length,
+        updatedCount: 0,
+      });
+    }
+
+    console.log(
+      `[PriceRefresh] ${cardsArray.length} cartas activas; ${cardsToRefresh.length} pendientes de refresco.`,
+    );
 
     // 2) Dividir en lotes de 75 (Límite de Scryfall por request en POST /cards/collection)
-    const batches = chunk(cardsArray, 75);
+    const batches = chunk(cardsToRefresh, 75);
     let updatedCount = 0;
 
     for (let i = 0; i < batches.length; i++) {
@@ -102,7 +136,7 @@ module.exports = async (req, res) => {
           if (usd === null && eur === null) continue;
 
           // Buscar cuáles de nuestras claves de carta coinciden con esta respuesta de Scryfall
-          for (const key of cardsArray) {
+          for (const key of batchKeys) {
             let matches = false;
 
             if (key.includes('|')) {
@@ -126,26 +160,16 @@ module.exports = async (req, res) => {
                 historyArray = [];
               }
 
-              const now = Date.now();
-              const isSameDay = (ts1, ts2) => {
-                const d1 = new Date(ts1);
-                const d2 = new Date(ts2);
-                return (
-                  d1.getUTCFullYear() === d2.getUTCFullYear() &&
-                  d1.getUTCMonth() === d2.getUTCMonth() &&
-                  d1.getUTCDate() === d2.getUTCDate()
-                );
-              };
-
-              if (historyArray.length > 0 && isSameDay(historyArray[historyArray.length - 1].timestamp, now)) {
+              const timestamp = Date.now();
+              if (historyArray.length > 0 && isSameUtcDay(historyArray[historyArray.length - 1].timestamp, now)) {
                 historyArray[historyArray.length - 1] = {
-                  timestamp: now,
+                  timestamp,
                   priceUsd: usd,
                   priceEur: eur,
                 };
               } else {
                 historyArray.push({
-                  timestamp: now,
+                  timestamp,
                   priceUsd: usd,
                   priceEur: eur,
                 });
@@ -183,9 +207,11 @@ module.exports = async (req, res) => {
     res.status(200).json({
       ok: true,
       message: `Precios actualizados exitosamente. Total registros insertados: ${updatedCount}`,
+      activeCount: cardsArray.length,
+      skippedCount: refreshedToday.size,
+      updatedCount,
     });
   } catch (e) {
     sendServerError(res, '/api/admin/refresh-prices', e);
   }
 };
-

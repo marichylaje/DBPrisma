@@ -132,6 +132,86 @@ test('admin: un token de usuario/dispositivo no sirve; ADMIN_SECRET y CRON_SECRE
   assert.equal(okCron.statusCode, 200);
 });
 
+test('cleanup conserva historiales activos y elimina los inactivos con más de 90 días sin actualizar', async () => {
+  overrides.set('userCollection.findMany', () => [
+    { cards: ['Atraxa|mom|1', 'Atraxa|mom|1', 'Sol Ring|cmm|2'] },
+  ]);
+  overrides.set('cardPriceHistory.findMany', () => [
+    { cardKey: 'Atraxa|mom|1' },
+    { cardKey: 'Old Card|set|3' },
+  ]);
+  overrides.set('cardPriceHistory.deleteMany', () => ({ count: 1 }));
+  const res = await run('api/admin/cleanup.js', {
+    headers: bearer('test-cron-secret'),
+  });
+
+  assert.equal(res.statusCode, 200);
+  const staleLookup = calls.find(
+    (call) => call.model === 'cardPriceHistory' && call.method === 'findMany',
+  );
+  assert.ok(staleLookup.args.where.updatedAt.lt instanceof Date);
+  assert.deepEqual(staleLookup.args.select, { cardKey: true });
+
+  const historyDelete = calls.find(
+    (call) => call.model === 'cardPriceHistory' && call.method === 'deleteMany',
+  );
+  assert.deepEqual(historyDelete.args.where.cardKey.in, ['Old Card|set|3']);
+  assert.equal(res.body.activePriceCardKeys, 2);
+  assert.equal(res.body.deleted.cardPriceHistory, 1);
+});
+
+test('refresh-prices omite las cartas ya actualizadas hoy y conserva la detección activa', async () => {
+  const now = new Date();
+  const todayTimestamp = now.getTime();
+  const yesterdayTimestamp = todayTimestamp - 24 * 60 * 60 * 1000;
+  const todayKey = 'Today Card|set|1';
+  const dueKey = 'Due Card|set|2';
+  overrides.set('userCollection.findMany', () => [
+    { cards: [todayKey, dueKey] },
+  ]);
+  overrides.set('cardPriceHistory.findMany', () => [
+    { cardKey: todayKey, history: [{ timestamp: todayTimestamp, priceUsd: 1 }] },
+    { cardKey: dueKey, history: [{ timestamp: yesterdayTimestamp, priceUsd: 1 }] },
+  ]);
+
+  const originalFetch = global.fetch;
+  const requests = [];
+  global.fetch = async (_url, options) => {
+    requests.push(JSON.parse(options.body));
+    return {
+      ok: true,
+      json: async () => ({
+        data: [{
+          name: 'Due Card',
+          set: 'set',
+          collector_number: '2',
+          prices: { usd: '2.00', eur: '1.80' },
+        }],
+      }),
+    };
+  };
+
+  try {
+    const res = await run('api/admin/refresh-prices.js', {
+      method: 'POST',
+      headers: { 'x-app-secret': 'test-admin-secret' },
+    });
+    assert.equal(res.statusCode, 200);
+    assert.equal(requests.length, 1);
+    assert.deepEqual(requests[0].identifiers, [{ set: 'set', collector_number: '2' }]);
+
+    const upsert = calls.find(
+      (call) => call.model === 'cardPriceHistory' && call.method === 'upsert',
+    );
+    assert.equal(upsert.args.where.cardKey, dueKey);
+    assert.equal(upsert.args.update.lastSeenAt, undefined);
+    assert.equal(res.body.skippedCount, 1);
+    assert.equal(res.body.updatedCount, 1);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 // ---- Aislamiento entre usuarios (IDOR) ---------------------------------------------------
 test('decks/list ignora el userKey del cliente y filtra por el dueño del token', async () => {
   await run('api/decks/list.js', { headers: bearer(deviceA), query: { userKey: 'dev_BBBB' } });

@@ -1,14 +1,52 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { sendServerError } = require('../lib/httpError');
 
-// Cambia este valor manualmente para forzar actualización de clientes.
-const LATEST_VERSION = '1.1.03';
+const LATEST_VERSION_UNIFIED = '1.1.03';
+
 const LATEST_IOS_VERSION = '1.1.03';
 const LATEST_ANDROID_VERSION = '1.1.04';
+
+/**
+ * Compara dos versiones semánticas (ej: '1.1.03' vs '1.1.04').
+ * Retorna:
+ *  1 si versionA > versionB
+ * -1 si versionA < versionB
+ *  0 si son iguales
+ */
+const compareVersions = (versionA: string, versionB: string): number => {
+  const partsA = versionA.split('.').map(Number);
+  const partsB = versionB.split('.').map(Number);
+  const maxLength = Math.max(partsA.length, partsB.length);
+
+  for (let i = 0; i < maxLength; i++) {
+    const numA = partsA[i] || 0;
+    const numB = partsB[i] || 0;
+
+    if (numA > numB) return 1;
+    if (numA < numB) return -1;
+  }
+
+  return 0;
+};
+
+/**
+ * Devuelve la versión mayor entre LATEST_VERSION_UNIFIED y la versión específica del SO.
+ */
+const resolveEffectiveVersion = (platformVersion: string): string => {
+  return compareVersions(LATEST_VERSION_UNIFIED, platformVersion) > 0
+    ? LATEST_VERSION_UNIFIED
+    : platformVersion;
+};
+
 const MIN_REQUIRED_VERSION_IOS =
-  process.env.MIN_REQUIRED_VERSION_IOS?.trim() ||  LATEST_IOS_VERSION ||  LATEST_VERSION;
+  process.env.MIN_REQUIRED_VERSION_IOS?.trim() ||
+  resolveEffectiveVersion(LATEST_IOS_VERSION);
+
 const MIN_REQUIRED_VERSION_ANDROID =
-  process.env.MIN_REQUIRED_VERSION_ANDROID?.trim() || LATEST_ANDROID_VERSION ||  LATEST_VERSION;
+  process.env.MIN_REQUIRED_VERSION_ANDROID?.trim() ||
+  resolveEffectiveVersion(LATEST_ANDROID_VERSION);
+
+
 const ANDROID_STORE_URL =
   'https://play.google.com/store/apps/details?id=com.mtgdeckbuilder';
 const IOS_STORE_URL = 'https://apps.apple.com';

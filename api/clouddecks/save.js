@@ -1,11 +1,12 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + "/lib/cors");
-const { prisma } = require("../../lib/prisma");
 const { requireOwner } = require("../../lib/auth");
 const { getJsonBody } = require("../../lib/requestBody");
 const { resolveOwnerRecord } = require("../../lib/userLookup");
 const { checkWriteRateLimit } = require("../../lib/rateLimit");
-const { parseOrReject, deckPayload } = require("../../lib/validate");
+const { parseOrReject, cloudDeckSavePayload } = require("../../lib/validate");
 const { sendServerError } = require("../../lib/httpError");
+const { serializable } = require("../../lib/transaction");
+const { enforceDeckQuota, sendDeckQuotaError } = require("../../lib/deckQuota");
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -29,7 +30,7 @@ module.exports = async (req, res) => {
         });
     }
 
-    const payload = parseOrReject(res, deckPayload, body);
+    const payload = parseOrReject(res, cloudDeckSavePayload, body);
     if (!payload) return;
 
     const {
@@ -74,14 +75,19 @@ module.exports = async (req, res) => {
       sideboard: Array.isArray(sideboard) ? sideboard : [],
     };
 
-    const upserted = await prisma.cloudDeck.upsert({
-      where: { userKey_deckName: { userKey, deckName: composite } },
-      create: { userKey, ...data },
-      update: data,
+    const upserted = await serializable(async (tx) => {
+      const existing = await tx.cloudDeck.findUnique({
+        where: { userKey_deckName: { userKey, deckName: composite } },
+      });
+      await enforceDeckQuota(tx, userKey, "cloudDeck", existing?.deckName, deckName);
+      return existing
+        ? tx.cloudDeck.update({ where: { id: existing.id }, data })
+        : tx.cloudDeck.create({ data: { userKey, ...data } });
     });
 
     res.status(200).json({ ok: true, deck: upserted });
   } catch (e) {
+    if (sendDeckQuotaError(res, e)) return;
     sendServerError(res, "/api/clouddecks/save", e);
   }
 };

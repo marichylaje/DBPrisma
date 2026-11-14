@@ -4,6 +4,8 @@ const { decodeVerifiedToken, requireUser } = require('../../lib/auth');
 const { getJsonBody } = require('../../lib/requestBody');
 const { checkWriteRateLimit } = require('../../lib/rateLimit');
 const { sendServerError } = require('../../lib/httpError');
+const { serializable } = require('../../lib/transaction');
+const { DeckQuotaError, readDeckQuota, quotaResponse, sendDeckQuotaError } = require('../../lib/deckQuota');
 
 /**
  * POST /api/auth-sync/migrate-user-data
@@ -49,8 +51,34 @@ module.exports = async (req, res) => {
 
     const link = { userId, nickname: user.nickname };
 
-    const summary = await prisma.$transaction(async (tx) => {
+    const summary = await serializable(async (tx) => {
       const result = { decks: 0, allDecks: 0, collection: 0, wishlist: 0, entitlement: 0, conflicts: 0 };
+
+      // Resolve the effective tier before checking the combined account quota.
+      const [entTarget, entSource] = await Promise.all([
+        tx.userEntitlement.findUnique({ where: { userKey: userId } }),
+        tx.userEntitlement.findUnique({ where: { userKey: deviceKey } }),
+      ]);
+      if (entSource) {
+        if (entTarget) {
+          result.conflicts += 1;
+        } else {
+          await tx.userEntitlement.update({
+            where: { userKey: deviceKey },
+            data: { userKey: userId, nickname: user.nickname },
+          });
+          result.entitlement = 1;
+        }
+      }
+
+      const quota = await readDeckQuota(tx, userId);
+      const incomingDecks = await tx.userDeck.findMany({
+        where: { userKey: deviceKey }, select: { deckName: true },
+      });
+      const combinedNames = new Set([...quota.deckNames, ...incomingDecks.map((deck) => deck.deckName)]);
+      if (combinedNames.size > quota.limit && combinedNames.size > quota.count) {
+        throw new DeckQuotaError(quotaResponse(quota));
+      }
 
       // Mazos: solo se mueven los que no chocan por nombre con los de la cuenta.
       for (const [model, key] of [['userDeck', 'decks'], ['allDeck', 'allDecks']]) {
@@ -105,28 +133,12 @@ module.exports = async (req, res) => {
         result.wishlist = 1;
       }
 
-      // Trial / suscripción compradas antes de iniciar sesión.
-      const [entTarget, entSource] = await Promise.all([
-        tx.userEntitlement.findUnique({ where: { userKey: userId } }),
-        tx.userEntitlement.findUnique({ where: { userKey: deviceKey } }),
-      ]);
-      if (entSource) {
-        if (entTarget) {
-          result.conflicts += 1;
-        } else {
-          await tx.userEntitlement.update({
-            where: { userKey: deviceKey },
-            data: { userKey: userId, nickname: user.nickname },
-          });
-          result.entitlement = 1;
-        }
-      }
-
       return result;
     });
 
     res.status(200).json({ ok: true, migrated: summary });
   } catch (e) {
+    if (sendDeckQuotaError(res, e)) return;
     sendServerError(res, '/api/auth-sync/migrate-user-data', e);
   }
 };

@@ -1,11 +1,12 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
-const { prisma } = require('../../lib/prisma');
 const { requireOwner } = require('../../lib/auth');
 const { getJsonBody } = require('../../lib/requestBody');
 const { resolveOwnerRecord } = require('../../lib/userLookup');
 const { checkWriteRateLimit } = require('../../lib/rateLimit');
 const { parseOrReject, userDeckSavePayload } = require('../../lib/validate');
 const { sendServerError } = require('../../lib/httpError');
+const { serializable } = require('../../lib/transaction');
+const { enforceDeckQuota, sendDeckQuotaError } = require('../../lib/deckQuota');
 
 module.exports = async (req, res) => {
   applyCors(req, res);
@@ -82,26 +83,23 @@ module.exports = async (req, res) => {
       deckData: deckDataPayload,
     };
 
-    // Modo A: actualizar por id, solo si el deck pertenece al dueño autenticado.
-    if (deckId) {
-      const existing = await prisma.userDeck.findFirst({ where: { id: deckId, userKey } });
-      if (!existing) return res.status(404).json({ error: 'not_found' });
-
-      const updated = await prisma.userDeck.update({ where: { id: existing.id }, data });
-      return res.status(200).json({ ok: true, deck: updated });
-    }
-
-    // Modo B: upsert por (userKey, oldDeckName|deckName).
     const composite = oldDeckName || deckName;
-
-    const upserted = await prisma.userDeck.upsert({
-      where: { userKey_deckName: { userKey, deckName: composite } },
-      create: { userKey, ...data },
-      update: data,
+    const saved = await serializable(async (tx) => {
+      const existing = deckId
+        ? await tx.userDeck.findFirst({ where: { id: deckId, userKey } })
+        : await tx.userDeck.findUnique({
+            where: { userKey_deckName: { userKey, deckName: composite } },
+          });
+      if (deckId && !existing) return null;
+      await enforceDeckQuota(tx, userKey, 'userDeck', existing?.deckName, deckName);
+      return existing
+        ? tx.userDeck.update({ where: { id: existing.id }, data })
+        : tx.userDeck.create({ data: { userKey, ...data } });
     });
-
-    res.status(200).json({ ok: true, deck: upserted });
+    if (!saved) return res.status(404).json({ error: 'not_found' });
+    res.status(200).json({ ok: true, deck: saved });
   } catch (e) {
+    if (sendDeckQuotaError(res, e)) return;
     sendServerError(res, '/api/decks/save', e);
   }
 };

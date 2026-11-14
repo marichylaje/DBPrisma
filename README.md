@@ -38,6 +38,33 @@ Patrón común:
 - El dueño de los datos (`userKey`) sale **siempre del token**, nunca del body/query. Un token de dispositivo no sirve en rutas de cuenta.
 - Al iniciar sesión, `POST /api/auth-sync/migrate-user-data` traslada los datos anónimos a la cuenta usando el token de dispositivo como prueba de propiedad.
 
+### Cuota de mazos en DB
+
+- 20 nombres de mazo para Free; 50 para suscripcion o trial vigente, determinados
+  por `UserEntitlement` del propietario del JWT (incluido el trial compartido).
+- La cuota cuenta la union de nombres exactos en `UserDeck` y `CloudDeck`.
+  Un mismo nombre en ambas tablas cuenta una vez; `AllDeck` es una proyeccion
+  publica para descubrimiento y no consume otra plaza.
+- `POST /api/decks/save` y `POST /api/clouddecks/save` comprueban altas y cambios
+  de nombre en transacciones Serializable con reintentos acotados. Las ediciones
+  que conservan el nombre no necesitan consultas de cuota.
+- Un cambio de nombre sin copia en la otra tabla no aumenta la cuota. Si la otra
+  tabla conserva el nombre anterior, el nuevo nombre necesita una plaza libre.
+- Al alcanzar la cuota, las altas devuelven HTTP 409
+  `{ error: "deck_limit_reached", limit, count, deckNames }`. Los mazos existentes
+  siguen siendo editables, incluso con exceso historico o tras volver a Free.
+  No se borran datos automaticamente. La plaza solo se libera cuando el nombre
+  desaparece de ambas tablas.
+- `GET /api/decks/quota`, autenticado y `no-store`, devuelve
+  `{ limit, count, deckNames }` sin cartas. El cliente lo consulta una sola vez
+  al iniciar una subida masiva y omite altas que no caben; una respuesta 409
+  refresca esa instantanea sin otra llamada. La validacion final sigue en servidor.
+- La migracion de dispositivo a cuenta resuelve primero el entitlement efectivo
+  y comprueba la cuota conjunta. Si no cabe, devuelve 409 y revierte toda la
+  migracion, sin perder datos de origen.
+- No requiere cambios de esquema ni migracion SQL. Desplegar backend antes que
+  la app nueva. Pruebas: `node --test tests/deck-quota.test.js`.
+
 ### Verificacion de correo y recuperacion de contrasena
 
 - `POST /api/auth-email-code` recibe `{ email, purpose: "register" | "reset", language? }`.

@@ -46,6 +46,23 @@ const MIN_REQUIRED_VERSION_ANDROID =
   process.env.MIN_REQUIRED_VERSION_ANDROID?.trim() ||
   resolveEffectiveVersion(LATEST_ANDROID_VERSION);
 
+function resolvePlatform(req) {
+  const explicitPlatform = [
+    req.query?.platform,
+    req.headers['x-app-platform'],
+    req.headers['x-platform'],
+  ].find((value) =>
+    typeof value === 'string' && /^(android|ios)$/i.test(value.trim()),
+  );
+  if (explicitPlatform) return explicitPlatform.trim().toLowerCase();
+
+  // Older React Native clients only provide the native networking user agent.
+  const userAgent = req.headers['user-agent'];
+  if (typeof userAgent !== 'string') return null;
+  if (/\bandroid\b|\bdalvik\b|\bokhttp\b/i.test(userAgent)) return 'android';
+  if (/\biphone\b|\bipad\b|\bipod\b|\bcfnetwork\b/i.test(userAgent)) return 'ios';
+  return null;
+}
 
 const ANDROID_STORE_URL =
   'https://play.google.com/store/apps/details?id=com.mtgdeckbuilder';
@@ -102,14 +119,23 @@ module.exports = async (req, res) => {
         ? req.headers['x-app-version']
         : '';
     const currentVersion = versionFromQuery || versionFromHeader;
+    const platform = resolvePlatform(req);
+    const requiredVersion =
+      platform === 'android'
+        ? MIN_REQUIRED_VERSION_ANDROID
+        : platform === 'ios'
+          ? MIN_REQUIRED_VERSION_IOS
+          : LATEST_VERSION_UNIFIED;
+
+    res.setHeader('Cache-Control', 'private, no-store');
 
     res.status(200).json({
-      latestVersion: LATEST_VERSION_UNIFIED,
-      minRequiredVersion: LATEST_VERSION_UNIFIED,
+      latestVersion: requiredVersion,
+      minRequiredVersion: requiredVersion,
       minRequiredVersionIos: MIN_REQUIRED_VERSION_IOS,
       minRequiredVersionAndroid: MIN_REQUIRED_VERSION_ANDROID,
       isUpdateRequired: currentVersion
-        ? isLowerVersion(currentVersion, LATEST_VERSION_UNIFIED)
+        ? isLowerVersion(currentVersion, requiredVersion)
         : false,
       storeUrlAndroid: ANDROID_STORE_URL,
       storeUrlIos: IOS_STORE_URL,

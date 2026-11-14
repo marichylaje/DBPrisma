@@ -220,9 +220,18 @@ Dominios principales:
 ### Versiones mínimas de la app
 - `MIN_REQUIRED_VERSION_IOS` y `MIN_REQUIRED_VERSION_ANDROID` definen por separado
   la versión mínima obligatoria informada por `GET /api/app-config`.
-- Si una variable está vacía o no está configurada, el endpoint usa `LATEST_VERSION`
-  como valor de respaldo. `latestVersion`, `minRequiredVersion` e
-  `isUpdateRequired` se mantienen para compatibilidad con versiones antiguas de la app.
+- Si una variable está vacía o no está configurada, se usa la mayor entre
+  `LATEST_VERSION_UNIFIED` y `LATEST_IOS_VERSION` / `LATEST_ANDROID_VERSION`.
+- La plataforma se obtiene de `?platform=android|ios`, `X-App-Platform` o
+  `X-Platform`, en ese orden. Para clientes antiguos se reconoce el User-Agent
+  nativo (Android/Dalvik/okhttp o iPhone/iPad/iPod/CFNetwork).
+- `latestVersion`, `minRequiredVersion` e `isUpdateRequired` usan el mínimo de
+  esa plataforma para compatibilidad con clientes antiguos. El booleano compara
+  `currentVersion` (query) o `X-App-Version` con ese mismo mínimo.
+  Sin plataforma reconocible se conserva la política unificada para no imponer
+  accidentalmente el mínimo Android a iOS; esos clientes deben indicar plataforma.
+- La respuesta usa `Cache-Control: private, no-store` porque depende de la
+  versión y plataforma del cliente.
 
 ### CORS (DONE)
 - `APP_ALLOWED_ORIGINS` (lista separada por comas, ej: `https://app.midominio.com,https://admin.midominio.com`)

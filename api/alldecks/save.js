@@ -96,14 +96,14 @@ module.exports = async (req, res) => {
       deck = await prisma.allDeck.upsert({
         where: { userKey_deckName: { userKey: targetUserKey, deckName } },
         create: { userKey: targetUserKey, deckName, ...data },
-        update: { ...data, userKey },
+        update: data,
       });
     } catch (error) {
       // Si ocurre una colisión por concurrencia paralela, reintentamos con update directo
       if (error.code === 'P2002') {
         deck = await prisma.allDeck.update({
           where: { userKey_deckName: { userKey: targetUserKey, deckName } },
-          data: { ...data, userKey },
+          data,
         });
       } else {
         throw error;

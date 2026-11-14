@@ -13,7 +13,7 @@ const LATEST_ANDROID_VERSION = '1.1.04';
  * -1 si versionA < versionB
  *  0 si son iguales
  */
-const compareVersions = (versionA: string, versionB: string): number => {
+const compareVersions = (versionA, versionB) => {
   const partsA = versionA.split('.').map(Number);
   const partsB = versionB.split('.').map(Number);
   const maxLength = Math.max(partsA.length, partsB.length);
@@ -32,7 +32,7 @@ const compareVersions = (versionA: string, versionB: string): number => {
 /**
  * Devuelve la versión mayor entre LATEST_VERSION_UNIFIED y la versión específica del SO.
  */
-const resolveEffectiveVersion = (platformVersion: string): string => {
+const resolveEffectiveVersion = (platformVersion) => {
   return compareVersions(LATEST_VERSION_UNIFIED, platformVersion) > 0
     ? LATEST_VERSION_UNIFIED
     : platformVersion;
@@ -104,12 +104,12 @@ module.exports = async (req, res) => {
     const currentVersion = versionFromQuery || versionFromHeader;
 
     res.status(200).json({
-      latestVersion: LATEST_VERSION,
-      minRequiredVersion: LATEST_VERSION,
+      latestVersion: LATEST_VERSION_UNIFIED,
+      minRequiredVersion: LATEST_VERSION_UNIFIED,
       minRequiredVersionIos: MIN_REQUIRED_VERSION_IOS,
       minRequiredVersionAndroid: MIN_REQUIRED_VERSION_ANDROID,
       isUpdateRequired: currentVersion
-        ? isLowerVersion(currentVersion, LATEST_VERSION)
+        ? isLowerVersion(currentVersion, LATEST_VERSION_UNIFIED)
         : false,
       storeUrlAndroid: ANDROID_STORE_URL,
       storeUrlIos: IOS_STORE_URL,

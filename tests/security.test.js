@@ -541,6 +541,35 @@ test('isSignedTransaction distingue JWS de recibos base64 legacy', () => {
 });
 
 // ---- Galer�a AllDecks: listado paginado liviano + detalle bajo demanda ---------------------
+test('alldecks/save actualiza el mazo existente sin cambiar su userKey y causar colision', async () => {
+  const existingUserKey = 'dev_previous';
+  let updateArgs;
+  overrides.set('user.findUnique', () => ({ id: 'auth_user1', nickname: 'ana' }));
+  overrides.set('allDeck.findFirst', () => ({ userKey: existingUserKey }));
+  overrides.set('allDeck.upsert', () => {
+    throw Object.assign(new Error('unique conflict'), { code: 'P2002' });
+  });
+  overrides.set('allDeck.update', (args) => {
+    updateArgs = args;
+    return { id: 'deck1', ...args.data, userKey: existingUserKey, deckName: 'Atraxa' };
+  });
+
+  const res = await run('api/alldecks/save.js', {
+    method: 'POST',
+    headers: bearer(userToken),
+    body: {
+      deckName: 'Atraxa',
+      commanderName: 'Atraxa',
+      cards: Array.from({ length: 99 }, () => ({ count: 1 })),
+      sideboard: [],
+    },
+  });
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(updateArgs.where.userKey_deckName.userKey, existingUserKey);
+  assert.equal(Object.hasOwn(updateArgs.data, 'userKey'), false);
+});
+
 test('alldecks/list?view=summary pagina por cursor y no env�a cartas', async () => {
   const mkDeck = (id, cards) => ({
     id, userKey: 'dev_AAAA', userId: null, nickname: 'ana', deckName: `d${id}`,

@@ -4,8 +4,20 @@ const assert = require('assert');
 const { _internals } = require('./api/iap/verify');
 
 function testAndroidAllowlist() {
-  assert.strictEqual(_internals.isAllowedProductId('android', 'premium_support_5'), true);
-  assert.strictEqual(_internals.isAllowedProductId('android', 'premium_support_20'), true);
+  for (const productId of [
+    'premium_month',
+    'supporter_8_month',
+    'supporter_12_month',
+    'supporter_15_month',
+    'supporter_20_month',
+    'premium_support_5',
+    'premium_support_8',
+    'premium_support_12',
+    'premium_support_15',
+    'premium_support_20',
+  ]) {
+    assert.strictEqual(_internals.isAllowedProductId('android', productId), true);
+  }
   assert.strictEqual(_internals.isAllowedProductId('android', 'premium_support_invalid'), false);
   console.log('✅ allowlist Android: OK');
 }

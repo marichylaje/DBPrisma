@@ -319,7 +319,7 @@ Matriz de product IDs soportados:
 | Plataforma | Product IDs permitidos |
 |---|---|
 | iOS | `premium.support.5`, `premium.support.8`, `premium.support.12`, `premium.support.15`, `premium.support.20` |
-| Android | `premium_support_5`, `premium_support_8`, `premium_support_12`, `premium_support_15`, `premium_support_20` |
+| Android | `premium_month`, `supporter_8_month`, `supporter_12_month`, `supporter_15_month`, `supporter_20_month`; también `premium_support_5`, `premium_support_8`, `premium_support_12`, `premium_support_15`, `premium_support_20` para compatibilidad con versiones anteriores |
 
 ### Mazos y colección
 - `POST /api/decks/save`

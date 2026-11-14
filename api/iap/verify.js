@@ -17,6 +17,11 @@ const IOS_ALLOWED_PRODUCT_IDS = new Set([
   'premium.support.20',
 ]);
 const ANDROID_ALLOWED_PRODUCT_IDS = new Set([
+  'premium_month',
+  'supporter_8_month',
+  'supporter_12_month',
+  'supporter_15_month',
+  'supporter_20_month',
   'premium_support_5',
   'premium_support_8',
   'premium_support_12',

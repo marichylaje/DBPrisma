@@ -1,9 +1,9 @@
 const { applyCors, handleCorsPreflight } = require(process.cwd() + '/lib/cors');
 const { sendServerError } = require('../lib/httpError');
 
-const LATEST_VERSION_UNIFIED = '1.1.03';
+const LATEST_VERSION_UNIFIED = '1.1.10';
 
-const LATEST_IOS_VERSION = '1.1.03';
+const LATEST_IOS_VERSION = '1.1.10';
 const LATEST_ANDROID_VERSION = '1.1.10';
 
 /**

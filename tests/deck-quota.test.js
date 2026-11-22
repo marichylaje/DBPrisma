@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 
 const root = path.resolve(__dirname, '..');
-const modelNames = ['userDeck', 'cloudDeck', 'allDeck', 'userEntitlement', 'user', 'userCollection', 'userWishlist'];
+const modelNames = ['userDeck', 'cloudDeck', 'allDeck', 'userEntitlement', 'user', 'userCollection', 'userWishlist', 'userTradeList'];
 let state;
 let revision;
 let forcedConflicts;

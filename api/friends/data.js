@@ -3,7 +3,7 @@ const { prisma } = require('../../lib/prisma');
 const { requireUser } = require('../../lib/auth');
 const { sendServerError } = require('../../lib/httpError');
 
-const TYPES = new Set(['collection', 'wishlist', 'decks']);
+const TYPES = new Set(['collection', 'wishlist', 'trade', 'decks']);
 
 function latestCards(rows) {
   const sorted = [...rows].sort(
@@ -27,7 +27,7 @@ function mapDeck(deck) {
 }
 
 /**
- * GET /api/friends/data?userId=<me>&friendId=<friend>&type=collection|wishlist|decks
+ * GET /api/friends/data?userId=<me>&friendId=<friend>&type=collection|wishlist|trade|decks
  * Solo disponible entre amigos con la amistad aceptada.
  */
 module.exports = async (req, res) => {
@@ -46,7 +46,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'userId and friendId are required' });
     }
     if (typeof type !== 'string' || !TYPES.has(type)) {
-      return res.status(400).json({ error: 'type must be collection, wishlist or decks' });
+      return res.status(400).json({ error: 'type must be collection, wishlist, trade or decks' });
     }
     if (userId !== auth.userId) {
       return res.status(403).json({ error: 'forbidden' });
@@ -76,6 +76,11 @@ module.exports = async (req, res) => {
 
     if (type === 'wishlist') {
       const rows = await prisma.userWishlist.findMany({ where: owner });
+      return res.status(200).json({ ok: true, type, cards: latestCards(rows) });
+    }
+
+    if (type === 'trade') {
+      const rows = await prisma.userTradeList.findMany({ where: owner });
       return res.status(200).json({ ok: true, type, cards: latestCards(rows) });
     }
 

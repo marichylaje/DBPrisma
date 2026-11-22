@@ -52,14 +52,18 @@ module.exports = async (req, res) => {
     }
 
     // userKey con los que se guardaron datos de esta cuenta (id de usuario y/o clave de dispositivo).
-    const [decks, allDecks, collections, wishlists] = await Promise.all([
+    const [decks, allDecks, collections, wishlists, tradeLists] = await Promise.all([
       prisma.userDeck.findMany({ where: { userId }, select: { userKey: true }, distinct: ['userKey'] }),
       prisma.allDeck.findMany({ where: { userId }, select: { userKey: true }, distinct: ['userKey'] }),
       prisma.userCollection.findMany({ where: { userId }, select: { userKey: true } }),
       prisma.userWishlist.findMany({ where: { userId }, select: { userKey: true } }),
+      prisma.userTradeList.findMany({ where: { userId }, select: { userKey: true } }),
     ]);
     const userKeys = [
-      ...new Set([userId, ...[...decks, ...allDecks, ...collections, ...wishlists].map((r) => r.userKey)]),
+      ...new Set([
+        userId,
+        ...[...decks, ...allDecks, ...collections, ...wishlists, ...tradeLists].map((r) => r.userKey),
+      ]),
     ];
 
     await prisma.$transaction([
@@ -70,6 +74,7 @@ module.exports = async (req, res) => {
       prisma.allDeck.deleteMany({ where: { userKey: { in: userKeys }, userId: null } }),
       prisma.userCollection.deleteMany({ where: { userKey: { in: userKeys }, userId: null } }),
       prisma.userWishlist.deleteMany({ where: { userKey: { in: userKeys }, userId: null } }),
+      prisma.userTradeList.deleteMany({ where: { userKey: { in: userKeys }, userId: null } }),
       prisma.userEntitlement.updateMany({ where: { userKey: { in: userKeys } }, data: { nickname: null } }),
       prisma.processedIapNotification.updateMany({ where: { userKey: { in: userKeys } }, data: { nickname: null } }),
       prisma.user.delete({ where: { id: userId } }),

@@ -52,7 +52,7 @@ module.exports = async (req, res) => {
     const link = { userId, nickname: user.nickname };
 
     const summary = await serializable(async (tx) => {
-      const result = { decks: 0, allDecks: 0, collection: 0, wishlist: 0, entitlement: 0, conflicts: 0 };
+      const result = { decks: 0, allDecks: 0, collection: 0, wishlist: 0, tradeList: 0, entitlement: 0, conflicts: 0 };
 
       // Resolve the effective tier before checking the combined account quota.
       const [entTarget, entSource] = await Promise.all([
@@ -131,6 +131,27 @@ module.exports = async (req, res) => {
           await tx.userWishlist.update({ where: { userKey: deviceKey }, data: { userKey: userId, ...link } });
         }
         result.wishlist = 1;
+      }
+
+      // Cartas para intercambiar: se fusiona (unión de nombres).
+      const [tradeTarget, tradeSource] = await Promise.all([
+        tx.userTradeList.findUnique({ where: { userKey: userId } }),
+        tx.userTradeList.findUnique({ where: { userKey: deviceKey } }),
+      ]);
+      if (tradeSource) {
+        if (tradeTarget) {
+          const merged = [
+            ...new Set([
+              ...(Array.isArray(tradeTarget.cards) ? tradeTarget.cards : []),
+              ...(Array.isArray(tradeSource.cards) ? tradeSource.cards : []),
+            ]),
+          ];
+          await tx.userTradeList.update({ where: { userKey: userId }, data: { cards: merged, ...link } });
+          await tx.userTradeList.delete({ where: { userKey: deviceKey } });
+        } else {
+          await tx.userTradeList.update({ where: { userKey: deviceKey }, data: { userKey: userId, ...link } });
+        }
+        result.tradeList = 1;
       }
 
       return result;

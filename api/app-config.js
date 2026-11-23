@@ -4,9 +4,9 @@ const { sendServerError } = require('../lib/httpError');
 const LATEST_VERSION_UNIFIED = '1.1.10';
 
 const LATEST_IOS_VERSION = '1.1.10';
-const LATEST_ANDROID_VERSION = '1.1.10';
+const LATEST_ANDROID_VERSION = '1.1.15';
 
-/**
+/** 
  * Compara dos versiones semánticas (ej: '1.1.03' vs '1.1.04').
  * Retorna:
  *  1 si versionA > versionB
